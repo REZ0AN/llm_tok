@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Inference Engineering</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a18;
+    --ink2: #3a3a36;
+    --ink3: #6a6a64;
+    --paper: #f7f4ee;
+    --paper2: #ede9e0;
+    --rule: #c8c2b0;
+    --accent: #8b3a2a;
+    --link: #2a5a8b;
+    --font-body: 'Crimson Pro', Georgia, serif;
+    --font-code: 'Source Code Pro', 'Courier New', monospace;
+    --page-w: 680px;
+  }
+
+  html { background: #d0cbbf; font-size: 17px; }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--ink);
+    line-height: 1.75;
+    background: #d0cbbf;
+  }
+
+  /* ── page shell ── */
+  .page {
+    background: var(--paper);
+    width: var(--page-w);
+    margin: 2rem auto;
+    padding: 64px 72px 80px;
+    box-shadow: 3px 3px 18px rgba(0,0,0,0.22), -1px -1px 4px rgba(0,0,0,0.08);
+    position: relative;
+    min-height: 900px;
+  }
+
+  .page::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 56px; bottom: 0;
+    width: 1px;
+    background: rgba(180,100,80,0.18);
+  }
+
+  /* running header */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 8px;
+    margin-bottom: 48px;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  .page-num {
+    font-size: 0.72rem;
+    color: var(--ink3);
+  }
+
+  /* ── typography ── */
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin-bottom: 0.3em;
+    color: var(--ink);
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin: 2.4em 0 0.6em;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 1.8em 0 0.4em;
+    color: var(--ink2);
+  }
+
+  p { margin-bottom: 0.9em; }
+
+  .subtitle {
+    font-style: italic;
+    color: var(--ink3);
+    font-size: 1.05rem;
+    margin-bottom: 0.2em;
+  }
+
+  .meta {
+    font-size: 0.8rem;
+    color: var(--ink3);
+    margin-bottom: 2em;
+    padding-bottom: 1.5em;
+    border-bottom: 2px solid var(--rule);
+  }
+
+  /* ── tooltip keyword ── */
+  .kw {
+    color: var(--accent);
+    font-style: italic;
+    cursor: help;
+    border-bottom: 1px dotted var(--accent);
+    position: relative;
+    display: inline;
+  }
+
+  .kw .tip {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #f0ece2;
+    font-family: var(--font-body);
+    font-style: normal;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    padding: 9px 12px;
+    border-radius: 3px;
+    width: 260px;
+    z-index: 100;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+    box-shadow: 2px 3px 10px rgba(0,0,0,0.35);
+    white-space: normal;
+  }
+
+  .kw .tip::after {
+    content: '';
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--ink);
+  }
+
+  .kw:hover .tip,
+  .kw:focus .tip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  /* code blocks */
+  pre {
+    background: var(--paper2);
+    border-left: 3px solid var(--rule);
+    padding: 12px 16px;
+    font-family: var(--font-code);
+    font-size: 0.72rem;
+    line-height: 1.6;
+    margin: 1.2em 0 1.4em;
+    overflow-x: auto;
+    color: var(--ink2);
+  }
+
+  code {
+    font-family: var(--font-code);
+    font-size: 0.82em;
+    background: var(--paper2);
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: var(--ink2);
+  }
+
+  /* tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 1.2em 0 1.6em;
+  }
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--rule);
+    padding: 5px 10px 5px 0;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    color: var(--ink2);
+  }
+
+  td {
+    border-bottom: 1px solid var(--paper2);
+    padding: 5px 10px 5px 0;
+    vertical-align: top;
+    color: var(--ink2);
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  /* callout box */
+  .callout {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    background: var(--paper2);
+    padding: 12px 16px;
+    margin: 1.4em 0;
+    font-size: 0.88rem;
+    color: var(--ink2);
+  }
+
+  .callout strong { color: var(--accent); }
+
+  /* toc */
+  .toc { margin: 1.4em 0 0; }
+  .toc-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 0.92rem;
+    color: var(--ink2);
+  }
+  .toc-item .toc-dots {
+    flex: 1;
+    border-bottom: 1px dotted var(--rule);
+    margin-bottom: 3px;
+  }
+  .toc-item .toc-pg { color: var(--ink3); font-size: 0.82rem; min-width: 20px; text-align: right; }
+  .toc-part { font-size: 0.75rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink3); margin-top: 1em; padding-top: 0.4em; border-top: 1px solid var(--rule); }
+
+  /* formula highlight */
+  .formula {
+    display: block;
+    font-family: var(--font-code);
+    font-size: 0.78rem;
+    background: var(--paper2);
+    border: 1px solid var(--rule);
+    padding: 10px 14px;
+    margin: 0.8em 0;
+    color: var(--ink2);
+    line-height: 1.7;
+  }
+
+  ol, ul { padding-left: 1.4em; margin-bottom: 0.9em; }
+  li { margin-bottom: 0.3em; font-size: 0.95rem; color: var(--ink2); }
+
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2em 0; }
+
+  /* page nav */
+  .page-nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 48px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8rem;
+    color: var(--ink3);
+  }
+
+  .page-nav button {
+    background: none;
+    border: 1px solid var(--rule);
+    padding: 4px 14px;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    cursor: pointer;
+    color: var(--ink2);
+    border-radius: 2px;
+  }
+
+  .page-nav button:hover { background: var(--paper2); }
+  .page-nav button:disabled { opacity: 0.3; cursor: default; }
+
+  /* hidden pages */
+  .pg { display: none; }
+  .pg.active { display: block; }
+
+  /* section number */
+  .sec-num { color: var(--ink3); font-size: 0.85em; margin-right: 0.4em; }
+</style>
+</head>
+<body>
+
+<div class="page" id="book">
+
+  <!-- PAGE 1 — Title & TOC -->
+  <div class="pg active" id="p1">
+    <div class="page-header">
+      <span>LLM Inference Engineering</span>
+      <span class="page-num">i</span>
+    </div>
+
+    <h1>LLM Inference<br>Engineering</h1>
+    <p class="subtitle">Token Throughput, Power Consumption &amp; Hardware Selection</p>
+    <p class="meta">Version 1.0 &nbsp;·&nbsp; Reference Edition &nbsp;·&nbsp; For ML Engineers &amp; Infrastructure Teams</p>
+
+    <h2>Table of Contents</h2>
+    <div class="toc">
+      <div class="toc-part">Foundations</div>
+      <div class="toc-item"><span>I. Glossary of Terms</span><span class="toc-dots"></span><span class="toc-pg">2</span></div>
+      <div class="toc-item"><span>II. How Token Generation Works</span><span class="toc-dots"></span><span class="toc-pg">3</span></div>
+      <div class="toc-part">Calculation</div>
+      <div class="toc-item"><span>III. CPU-Based Token Estimation</span><span class="toc-dots"></span><span class="toc-pg">4</span></div>
+      <div class="toc-item"><span>IV. GPU-Based Token Estimation</span><span class="toc-dots"></span><span class="toc-pg">5</span></div>
+      <div class="toc-item"><span>V. VRAM Requirements</span><span class="toc-dots"></span><span class="toc-pg">6</span></div>
+      <div class="toc-item"><span>VI. Electricity Consumption</span><span class="toc-dots"></span><span class="toc-pg">7</span></div>
+      <div class="toc-part">Selection</div>
+      <div class="toc-item"><span>VII. Hardware Backtracking</span><span class="toc-dots"></span><span class="toc-pg">8</span></div>
+      <div class="toc-item"><span>VIII. Reference Tables</span><span class="toc-dots"></span><span class="toc-pg">9</span></div>
+      <div class="toc-item"><span>IX. Worked Examples</span><span class="toc-dots"></span><span class="toc-pg">10</span></div>
+      <div class="toc-item"><span>X. Quick Formula Sheet</span><span class="toc-dots"></span><span class="toc-pg">11</span></div>
+    </div>
+
+    <div class="callout" style="margin-top:2.4em;">
+      <strong>How to read this document.</strong> Technical terms are shown in <span class="kw" tabindex="0">italic red<span class="tip">Hover over any red italic term to see its definition inline — no need to flip to the glossary.</span></span>. Hover or tap them to see a definition tooltip. All formulas use plain text notation; multiply is ×, divide is ÷.
+    </div>
+
+    <div class="page-nav">
+      <button disabled>← Previous</button>
+      <span>Page 1 of 11</span>
+      <button onclick="go(2)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2 — Glossary -->
+  <div class="pg" id="p2">
+    <div class="page-header">
+      <span>Part I — Glossary</span>
+      <span class="page-num">2</span>
+    </div>
+
+    <h2><span class="sec-num">I.</span> Glossary of Terms</h2>
+    <p>Every term used in this document is defined below. Each also appears as a tooltip wherever it is used in the text.</p>
+
+    <table>
+      <thead><tr><th>Term</th><th>Full form</th><th>One-line definition</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Token</strong></td><td>—</td><td>Smallest unit processed by an LLM; ~0.75 words on average.</td></tr>
+        <tr><td><strong>TPS</strong></td><td>Tokens per second</td><td>Primary throughput metric — how many tokens generated each second.</td></tr>
+        <tr><td><strong>TTFT</strong></td><td>Time to first token</td><td>Latency from sending a prompt to receiving the first output token.</td></tr>
+        <tr><td><strong>TBT</strong></td><td>Time between tokens</td><td>Interval between successive output tokens; equals 1 ÷ TPS.</td></tr>
+        <tr><td><strong>FLOP</strong></td><td>Floating point operation</td><td>One arithmetic operation (add or multiply) on a decimal number.</td></tr>
+        <tr><td><strong>TFLOPS</strong></td><td>Tera FLOPs per second</td><td>10¹² FLOPs/sec — measures GPU/CPU compute speed.</td></tr>
+        <tr><td><strong>MFU</strong></td><td>Model FLOPs utilization</td><td>Fraction of peak TFLOPS actually used; typically 0.35–0.55 on GPU.</td></tr>
+        <tr><td><strong>VRAM</strong></td><td>Video RAM</td><td>High-speed memory on the GPU; holds weights, KV cache, activations.</td></tr>
+        <tr><td><strong>KV cache</strong></td><td>Key-Value cache</td><td>Stores attention states for prior tokens to avoid recomputation.</td></tr>
+        <tr><td><strong>Mem BW</strong></td><td>Memory bandwidth</td><td>GB/s throughput between VRAM and compute cores.</td></tr>
+        <tr><td><strong>Roofline</strong></td><td>Roofline model</td><td>Framework showing whether a workload hits the compute or bandwidth ceiling first.</td></tr>
+        <tr><td><strong>Ridge point</strong></td><td>—</td><td>Batch size at which workload shifts from memory-bound to compute-bound.</td></tr>
+        <tr><td><strong>Batch size</strong></td><td>—</td><td>Number of requests processed simultaneously on one GPU.</td></tr>
+        <tr><td><strong>TDP</strong></td><td>Thermal design power</td><td>Maximum sustained chip power draw in watts under full load.</td></tr>
+        <tr><td><strong>PUE</strong></td><td>Power usage effectiveness</td><td>Data-center overhead multiplier; PUE 1.3 = 30% extra beyond servers.</td></tr>
+        <tr><td><strong>TP</strong></td><td>Tensor parallelism</td><td>Splitting one model layer across multiple GPUs simultaneously.</td></tr>
+        <tr><td><strong>INT4 / INT8</strong></td><td>Integer quantization</td><td>Reduced-precision weight formats; cuts VRAM at minor quality cost.</td></tr>
+        <tr><td><strong>Perplexity</strong></td><td>ppl</td><td>Model quality metric — lower is better; quantization raises it slightly.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="page-nav">
+      <button onclick="go(1)">← Previous</button>
+      <span>Page 2 of 11</span>
+      <button onclick="go(3)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 3 — How Token Generation Works -->
+  <div class="pg" id="p3">
+    <div class="page-header">
+      <span>Part II — Token Generation Fundamentals</span>
+      <span class="page-num">3</span>
+    </div>
+
+    <h2><span class="sec-num">II.</span> How Token Generation Works</h2>
+
+    <p>LLM inference is <em>autoregressive</em>: each <span class="kw" tabindex="0">token<span class="tip">Smallest text unit processed by an LLM — roughly 0.75 words. "ChatGPT" = 1 token; "unbelievable" ≈ 3 tokens.</span></span> is generated one at a time by performing a full forward pass through the model. This differs fundamentally from training, where many samples are processed together.</p>
+
+    <h3>Two phases of inference</h3>
+
+    <p><strong>Prefill.</strong> All input prompt tokens are processed in parallel. This phase is compute-bound — the hardware is busy doing matrix multiplies. It ends by building the <span class="kw" tabindex="0">KV cache<span class="tip">Key-Value cache: stores the computed attention states for every prior token so they do not need to be recomputed at each decode step. Grows linearly with context length.</span></span>, which stores the "memory" of the entire prompt.</p>
+
+    <p><strong>Decode.</strong> One token is generated per step. Each step loads the full model weights from <span class="kw" tabindex="0">VRAM<span class="tip">Video RAM — high-speed memory physically on the GPU. Holds model weights, KV cache, and activations. H100 has 80 GB.</span></span> to produce a single output. This phase is <span class="kw" tabindex="0">memory-bandwidth<span class="tip">Memory bandwidth (GB/s): how fast the GPU can read data from VRAM to its compute cores. H100 = 3,350 GB/s. This — not TFLOPS — is usually the bottleneck during decode.</span></span>-bound for typical batch sizes.</p>
+
+    <h3>The Roofline model</h3>
+
+    <p>Every hardware setup has two ceilings. The <span class="kw" tabindex="0">roofline model<span class="tip">A framework that shows which resource — compute (TFLOPS) or memory bandwidth (GB/s) — limits performance first. The actual bottleneck depends on the arithmetic intensity of the workload.</span></span> tells you which one applies:</p>
+
+    <span class="formula">
+Compute ceiling:   Max TPS = Tensor_TFLOPS × 10¹² ÷ FLOPs_per_token<br>
+Bandwidth ceiling: Max TPS = Mem_BW_GBps ÷ (Model_GB ÷ Batch_size)<br>
+<br>
+Actual TPS ≈ min(Compute_ceiling, Bandwidth_ceiling) × MFU
+    </span>
+
+    <p>For decode at <span class="kw" tabindex="0">batch size<span class="tip">Number of requests processed simultaneously. Batch 1 = one user; batch 32 = 32 users in parallel. Higher batch amortizes weight-loading cost, improving throughput.</span></span> ≤ 32, virtually all modern GPUs are bandwidth-bound, not compute-bound.</p>
+
+    <h3>FLOPs per token</h3>
+
+    <p>For a decoder-only transformer in the decode phase:</p>
+    <span class="formula">FLOPs_per_token ≈ 2 × N_params</span>
+    <p>The factor 2 comes from one multiply and one add per parameter (a fused multiply-add, or FMA). For a 7 B model this is 14 × 10⁹ FLOPs per token.</p>
+
+    <h3>The ridge point</h3>
+
+    <p>The <span class="kw" tabindex="0">ridge point<span class="tip">The batch size at which arithmetic intensity crosses from memory-bound into compute-bound territory. Below it, more bandwidth helps. Above it, more TFLOPS help. Ridge point = TFLOPS × 1000 ÷ BW_GBps.</span></span> is the batch size at which your workload crosses from bandwidth-limited to compute-limited:</p>
+
+    <span class="formula">Ridge_point = Tensor_TFLOPS × 1000 ÷ Mem_BW_GBps<br><br>
+H100 SXM example: 989 × 1000 ÷ 3350 ≈ 295<br>
+→ Compute-bound only at batch ≥ 295 (FP16)</span>
+
+    <div class="callout"><strong>Key insight.</strong> For single-user or small-batch serving, buying a GPU with more <span class="kw" tabindex="0">TFLOPS<span class="tip">Tera FLOPs per second — 10¹² arithmetic operations per second. The peak compute rating of a GPU. For LLMs, always use Tensor Core TFLOPS, not CUDA Core TFLOPS.</span></span> rarely helps. Buying one with more bandwidth does.</div>
+
+    <div class="page-nav">
+      <button onclick="go(2)">← Previous</button>
+      <span>Page 3 of 11</span>
+      <button onclick="go(4)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 4 — CPU Estimation -->
+  <div class="pg" id="p4">
+    <div class="page-header">
+      <span>Part III — CPU-Based Token Estimation</span>
+      <span class="page-num">4</span>
+    </div>
+
+    <h2><span class="sec-num">III.</span> CPU-Based Token Estimation</h2>
+
+    <p>CPU inference is used for edge deployments, quantized small models (≤ 13 B), or when a GPU is unavailable. Performance is almost always limited by DDR memory bandwidth, not compute.</p>
+
+    <h3>Core formula</h3>
+
+    <span class="formula">
+TPS_cpu = Mem_BW_GBps ÷ (Model_GB ÷ Batch_size) × Efficiency<br><br>
+Where:<br>
+  Model_GB   = N_params × bytes_per_weight<br>
+  Efficiency = 0.70 – 0.85 (accounting for memory latency &amp; contention)<br>
+    </span>
+
+    <p>Bytes per weight by <span class="kw" tabindex="0">precision<span class="tip">The numeric format used to store model weights. FP32 = 4 bytes (full precision); FP16/BF16 = 2 bytes (half); INT8 = 1 byte; INT4 = 0.5 bytes. Lower precision = smaller model = faster on bandwidth-bound hardware.</span></span>:</p>
+
+    <table>
+      <thead><tr><th>Format</th><th>Bytes per weight</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>FP32</td><td>4</td><td>Full precision, rarely used for inference</td></tr>
+        <tr><td>FP16 / BF16</td><td>2</td><td>Standard inference precision</td></tr>
+        <tr><td>INT8</td><td>1</td><td>Halves VRAM; minor quality loss</td></tr>
+        <tr><td>INT4</td><td>0.5</td><td>Quarters VRAM; acceptable for most uses</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Multi-core scaling</h3>
+
+    <p>Additional cores help only when the workload is not already saturating the memory bus. <span class="kw" tabindex="0">Hyperthreading<span class="tip">Intel/AMD feature that runs two hardware threads per physical core. For memory-bound LLM inference it adds roughly 10–30% throughput — not 2×, because both threads share the same memory bus.</span></span> adds roughly 10–30% for memory-bound inference — not the 2× that the thread count suggests.</p>
+
+    <h3>Worked example</h3>
+
+    <div class="callout">
+      <strong>Setup:</strong> Llama 3 8 B quantized to <span class="kw" tabindex="0">INT4<span class="tip">4-bit integer quantization. Each weight stored in 0.5 bytes instead of 2 bytes (FP16). Reduces memory by 4×, enabling large models on CPU or consumer GPUs. Minor quality degradation measured in perplexity.</span></span>, AMD EPYC 9654, DDR5 @ 460 GB/s.<br><br>
+      Model size in RAM = 8 × 10⁹ × 0.5 bytes = <strong>4.0 GB</strong><br>
+      Bytes loaded per token = 4.0 GB (full weight sweep each step)<br>
+      Max TPS (BW ceiling) = 460 ÷ 4.0 = <strong>115 tok/s</strong><br>
+      Apply 0.75 efficiency → <strong>≈ 86 tok/s</strong> at batch 1
+    </div>
+
+    <h3>Practical notes</h3>
+    <ul>
+      <li>Use <code>llama.cpp</code> with AVX-512 or ARM AMX for best CPU performance.</li>
+      <li>NUMA-aware memory allocation matters on dual-socket servers — keep model and threads on the same socket.</li>
+      <li>CPU <span class="kw" tabindex="0">TDP<span class="tip">Thermal Design Power — the maximum sustained wattage a chip draws under full load. Server CPUs range from 120 W to 500 W. Multiply by number of sockets for total CPU power.</span></span> for server CPUs ranges from 150 W (efficiency) to 500 W (high-core-count). Plan cooling accordingly.</li>
+    </ul>
+
+    <div class="page-nav">
+      <button onclick="go(3)">← Previous</button>
+      <span>Page 4 of 11</span>
+      <button onclick="go(5)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 5 — GPU Estimation -->
+  <div class="pg" id="p5">
+    <div class="page-header">
+      <span>Part IV — GPU-Based Token Estimation</span>
+      <span class="page-num">5</span>
+    </div>
+
+    <h2><span class="sec-num">IV.</span> GPU-Based Token Estimation</h2>
+
+    <h3>CUDA cores vs Tensor cores</h3>
+
+    <p><span class="kw" tabindex="0">CUDA cores<span class="tip">General-purpose compute units on an NVIDIA GPU. Handle FP32 and INT32 arithmetic — everything that is not a matrix multiply. Do NOT use CUDA Core TFLOPS to estimate LLM speed.</span></span> handle general arithmetic. <span class="kw" tabindex="0">Tensor cores<span class="tip">Specialized GPU units for matrix multiplication (GEMM). Up to 16× faster than CUDA cores for the same operation. Since 95%+ of transformer compute is matmul, Tensor Core TFLOPS is the correct spec to use for LLM benchmarking.</span></span> are dedicated matrix-multiply units — up to 16× faster for that operation. Since transformers are 95%+ matrix multiplications, always use Tensor Core TFLOPS, not CUDA Core TFLOPS, when estimating LLM performance.</p>
+
+    <h3>GPU throughput formula</h3>
+
+    <span class="formula">
+TPS_gpu = min(Compute_TPS, Bandwidth_TPS) × MFU<br><br>
+Compute_TPS   = (Tensor_TFLOPS × 10¹²) ÷ (2 × N_params)<br>
+Bandwidth_TPS = Mem_BW_GBps ÷ (N_params × dtype_bytes ÷ Batch_size)<br><br>
+MFU (typical):<br>
+  Naive PyTorch          →  0.10 – 0.25<br>
+  vLLM / TensorRT-LLM    →  0.35 – 0.55<br>
+    </span>
+
+    <p><span class="kw" tabindex="0">MFU<span class="tip">Model FLOPs Utilization — the fraction of a GPU's theoretical peak that is actually used. A GPU rated at 1,000 TFLOPS running at 40% MFU delivers 400 effective TFLOPS. Always apply MFU before trusting a throughput estimate.</span></span> accounts for all real-world losses: kernel launch overhead, memory latency, tensor padding, and operator fusion gaps. Never assume MFU = 1.0.</p>
+
+    <h3>Effect of batch size</h3>
+
+    <p>Increasing <span class="kw" tabindex="0">batch size<span class="tip">Number of concurrent requests processed together. Higher batch amortizes the cost of loading weights from VRAM over more users, improving throughput at the cost of higher per-request latency.</span></span> raises arithmetic intensity until the ridge point is crossed:</p>
+
+    <span class="formula">
+Arithmetic_intensity = 2 × Batch_size ÷ dtype_bytes<br>
+GPU is compute-bound when: Arithmetic_intensity &gt; Ridge_point<br><br>
+→ Below ridge: add bandwidth (faster GPU or fewer parameters)<br>
+→ Above ridge: add compute (more TFLOPS or larger batch)
+    </span>
+
+    <h3>Multi-GPU tensor parallelism</h3>
+
+    <p><span class="kw" tabindex="0">Tensor parallelism<span class="tip">Splitting one model layer across N GPUs. Each GPU holds 1/N of the weight matrices and computes in parallel. Requires high-speed GPU interconnects (NVLink preferred) to exchange partial results between steps.</span></span> distributes one model across N GPUs:</p>
+
+    <span class="formula">
+TPS_N_GPU ≈ TPS_1_GPU × N × Parallel_efficiency<br><br>
+Parallel_efficiency:<br>
+  NVLink (H100 SXM)  →  0.70 – 0.90<br>
+  PCIe               →  0.50 – 0.70
+    </span>
+
+    <p><span class="kw" tabindex="0">NVLink<span class="tip">NVIDIA's high-speed GPU-to-GPU interconnect (~900 GB/s). Tensor parallelism requires GPUs to exchange activation tensors between every transformer layer. NVLink makes this fast; PCIe makes it a bottleneck at TP ≥ 4.</span></span> efficiency drops as N grows because inter-GPU communication increases with model depth. Beyond TP = 8, returns diminish steeply.</p>
+
+    <div class="page-nav">
+      <button onclick="go(4)">← Previous</button>
+      <span>Page 5 of 11</span>
+      <button onclick="go(6)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 6 — VRAM -->
+  <div class="pg" id="p6">
+    <div class="page-header">
+      <span>Part V — VRAM Requirements</span>
+      <span class="page-num">6</span>
+    </div>
+
+    <h2><span class="sec-num">V.</span> VRAM Requirements</h2>
+
+    <h3>Total VRAM formula</h3>
+
+    <span class="formula">
+VRAM_total = VRAM_weights + VRAM_KV_cache + VRAM_overhead<br><br>
+VRAM_weights   = N_params × dtype_bytes<br>
+VRAM_KV_cache  = 2 × N_layers × D_model × dtype_bytes × ctx_len × batch<br>
+VRAM_overhead  ≈ 15 – 20 % of weights  (CUDA context, fragmentation)<br><br>
+Rule of thumb: multiply your minimum by 1.20 to account for overhead.
+    </span>
+
+    <p>The factor of 2 in the <span class="kw" tabindex="0">KV cache<span class="tip">Key-Value cache — stores both the Key and Value matrices for every attention layer for every past token. The 2× factor reflects that both K and V are stored. Grows linearly with context length and batch size.</span></span> formula represents both the Key and Value matrices.</p>
+
+    <h3>KV cache growth with context</h3>
+
+    <p>For <strong>Llama 3 70 B</strong> at FP16 (N_layers = 80, D_model = 8192):</p>
+
+    <span class="formula">
+KV per token = 2 × 80 × 8192 × 2 bytes = 2,621,440 bytes ≈ 2.5 MB<br><br>
+At context 4,096 tokens, batch 1:  4,096 × 2.5 MB ≈  10.2 GB<br>
+At context 8,192 tokens, batch 4: 32,768 × 2.5 MB ≈  82.0 GB
+    </span>
+
+    <p>At batch 4 and 8 K context, the <span class="kw" tabindex="0">VRAM<span class="tip">Video RAM — the fast on-chip memory of the GPU. Everything the model needs during inference must fit here. If it does not fit, you must quantize, reduce batch size, shorten context, or add GPUs.</span></span> needed for the KV cache alone (82 GB) exceeds the model weights (140 GB ÷ 2 for INT8 = 70 GB).</p>
+
+    <h3>VRAM sizing by model and precision</h3>
+
+    <table>
+      <thead><tr><th>Model</th><th>FP16</th><th>INT8</th><th>INT4</th><th>Minimum config</th></tr></thead>
+      <tbody>
+        <tr><td>1 B</td><td>2 GB</td><td>1 GB</td><td>0.5 GB</td><td>GTX 1060 (6 GB)</td></tr>
+        <tr><td>7 B</td><td>14 GB</td><td>7 GB</td><td>3.5 GB</td><td>RTX 4060 Ti (16 GB)</td></tr>
+        <tr><td>13 B</td><td>26 GB</td><td>13 GB</td><td>6.5 GB</td><td>RTX 4090 (24 GB)</td></tr>
+        <tr><td>34 B</td><td>68 GB</td><td>34 GB</td><td>17 GB</td><td>2× A100 40 GB</td></tr>
+        <tr><td>70 B</td><td>140 GB</td><td>70 GB</td><td>35 GB</td><td>2× H100 80 GB</td></tr>
+        <tr><td>405 B</td><td>810 GB</td><td>405 GB</td><td>203 GB</td><td>8× H100 + offload</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout"><strong>Note.</strong> Add 20 – 40% to weights-only figures to account for <span class="kw" tabindex="0">KV cache<span class="tip">Key-Value cache — stores attention states for every previous token. At long contexts and high batch sizes, the KV cache can exceed the model weights themselves. Paged attention (vLLM) reduces fragmentation, fitting more concurrent requests in the same VRAM.</span></span> at your target context length and batch size. The table above shows weights only.</div>
+
+    <h3>Quantization trade-offs</h3>
+
+    <table>
+      <thead><tr><th>Precision</th><th>VRAM vs FP16</th><th>Speed vs FP16</th><th>Quality loss</th></tr></thead>
+      <tbody>
+        <tr><td>FP16 (baseline)</td><td>1×</td><td>1×</td><td>None</td></tr>
+        <tr><td><span class="kw" tabindex="0">INT8<span class="tip">8-bit integer quantization. Halves VRAM and bandwidth requirement. Adds roughly 0.5–1 perplexity point — negligible for most applications. Well-supported by bitsandbytes and TensorRT-LLM.</span></span></td><td>0.5×</td><td>1.5 – 1.8×</td><td>~0.5 – 1 ppl</td></tr>
+        <tr><td><span class="kw" tabindex="0">INT4<span class="tip">4-bit integer quantization (GPTQ, AWQ). Quarters VRAM. Adds 1–3 perplexity points. Well-suited for consumer GPU deployment of 7–70 B models. Use AWQ for best quality at this bitwidth.</span></span> (GPTQ/AWQ)</td><td>0.25×</td><td>2 – 3×</td><td>~1 – 3 ppl</td></tr>
+      </tbody>
+    </table>
+
+    <div class="page-nav">
+      <button onclick="go(5)">← Previous</button>
+      <span>Page 6 of 11</span>
+      <button onclick="go(7)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 7 — Power -->
+  <div class="pg" id="p7">
+    <div class="page-header">
+      <span>Part VI — Electricity Consumption</span>
+      <span class="page-num">7</span>
+    </div>
+
+    <h2><span class="sec-num">VI.</span> Electricity Consumption</h2>
+
+    <h3>Instantaneous power draw</h3>
+
+    <span class="formula">
+P_total = (P_GPU × N_GPU + P_CPU + P_DRAM + P_NVMe) × Utilization<br><br>
+P_GPU        = GPU TDP in watts<br>
+Utilization  = 0.70 – 1.00 for active inference<br>
+P_CPU        = 150 – 500 W (server CPUs)<br>
+P_DRAM       ≈ 3 W per 32 GB DIMM<br>
+P_NVMe       ≈ 5 – 10 W per drive
+    </span>
+
+    <p><span class="kw" tabindex="0">TDP<span class="tip">Thermal Design Power — the maximum sustained wattage a chip draws under full load. Real-world power under typical inference load is 70–95% of TDP. Use TDP for worst-case planning; use 80% for average cost estimates.</span></span> is the worst-case figure. Real inference workloads typically draw 70 – 95% of TDP.</p>
+
+    <h3>Energy per token</h3>
+
+    <span class="formula">
+Energy per token (Joules) = P_total_watts ÷ TPS<br>
+Energy per token (Wh)     = P_total_watts ÷ (TPS × 3,600)
+    </span>
+
+    <p><strong>Example — H100 SXM serving Llama 3 70 B:</strong></p>
+    <div class="callout">
+      P_total = 700 W TDP × 0.90 utilization = 630 W<br>
+      TPS = 2,000 tok/s (batch 16, TP=4, vLLM)<br>
+      Energy = 630 ÷ 2,000 = <strong>0.315 J / token</strong>
+    </div>
+
+    <h3>Cost per million tokens</h3>
+
+    <span class="formula">
+Cost / M_tokens = (J_per_token × 1,000,000 ÷ 3,600,000) × $/kWh × PUE<br><br>
+Example (above, $0.10/kWh, PUE 1.3):<br>
+= (0.315 × 10⁶ ÷ 3.6 × 10⁶) × 0.10 × 1.3<br>
+= 0.0875 kWh × 0.10 × 1.3<br>
+= $0.0114 per 1 M tokens (power only)
+    </span>
+
+    <p><span class="kw" tabindex="0">PUE<span class="tip">Power Usage Effectiveness — a data-center overhead multiplier. PUE 1.0 would mean zero overhead (physically impossible). Modern hyperscale DCs achieve 1.1 – 1.2; typical colocation is 1.3 – 1.5; older facilities can be 1.8+. Always include PUE in electricity cost estimates.</span></span> accounts for cooling, UPS, lighting, and networking overhead — never assume the wall-meter reads only server wattage.</p>
+
+    <h3>Monthly server power cost</h3>
+
+    <span class="formula">
+Monthly_kWh  = P_total_kW × 720 h × Avg_utilization × PUE<br>
+Monthly_cost = Monthly_kWh × $/kWh<br><br>
+Example (4× H100, 2.8 kW, 70% util, PUE 1.3, $0.10/kWh):<br>
+= 2.8 × 720 × 0.70 × 1.3 × $0.10 = $183 / month
+    </span>
+
+    <div class="callout"><strong>Remember.</strong> Power cost is only part of total cost. Add hardware amortization (<span class="kw" tabindex="0">CapEx<span class="tip">Capital Expenditure — the upfront cost of purchasing hardware. Typically amortized over 3 years for GPU servers. Example: a $40,000 H100 server = $1,111/month CapEx over 36 months.</span></span>) and colocation fees to arrive at true cost-per-token.</div>
+
+    <div class="page-nav">
+      <button onclick="go(6)">← Previous</button>
+      <span>Page 7 of 11</span>
+      <button onclick="go(8)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 8 — Backtracking -->
+  <div class="pg" id="p8">
+    <div class="page-header">
+      <span>Part VII — Hardware Backtracking</span>
+      <span class="page-num">8</span>
+    </div>
+
+    <h2><span class="sec-num">VII.</span> Hardware Selection by Backtracking</h2>
+
+    <p>Backtracking means starting from your SLA requirements and working backwards to the minimum hardware that satisfies them.</p>
+
+    <h3>Inputs (your requirements)</h3>
+
+    <table>
+      <thead><tr><th>Requirement</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Target <span class="kw" tabindex="0">TPS<span class="tip">Tokens per second — your throughput SLA. This is the primary number that drives hardware selection. Setting it too low wastes money; too high wastes capacity.</span></span></td><td>500 tok/s sustained</td></tr>
+        <tr><td>Max <span class="kw" tabindex="0">TTFT<span class="tip">Time to First Token — the latency from sending a prompt to seeing the first output word. Drives user experience for interactive applications. Long contexts increase TTFT significantly.</span></span></td><td>200 ms</td></tr>
+        <tr><td>Context length</td><td>8,192 tokens</td></tr>
+        <tr><td>Model size</td><td>70 B parameters</td></tr>
+        <tr><td>Precision</td><td>FP16 or INT8</td></tr>
+        <tr><td>Power budget</td><td>3.5 kW</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Step-by-step procedure</h3>
+
+    <p><strong>Step 1 — Compute VRAM floor.</strong> Calculate the minimum <span class="kw" tabindex="0">VRAM<span class="tip">Video RAM — must hold weights + KV cache + overhead. If total exceeds single-GPU VRAM, you need multiple GPUs or quantization.</span></span> needed for weights plus KV cache at your target context and batch size, multiplied by 1.20 for overhead.</p>
+
+    <p><strong>Step 2 — Derive required bandwidth.</strong> <code>Required_BW = model_GB × TPS ÷ batch_size</code>. This is usually the binding constraint. Select GPUs whose combined <span class="kw" tabindex="0">memory bandwidth<span class="tip">GB/s of data transfer from VRAM to compute units. For bandwidth-bound inference (most small-batch cases), throughput scales almost linearly with bandwidth.</span></span> meets or exceeds this figure.</p>
+
+    <p><strong>Step 3 — Verify compute headroom.</strong> Confirm that <code>N_GPU × Tensor_TFLOPS × MFU ≥ (2 × N_params × TPS) / 10¹²</code>. If not, increase GPU count or use a higher-TFLOPS card.</p>
+
+    <p><strong>Step 4 — Check power budget.</strong> <code>N_GPU × GPU_TDP ≤ Power_budget / 1.3</code>. If over budget, apply <span class="kw" tabindex="0">quantization<span class="tip">Reducing weight precision to cut VRAM and bandwidth requirements. INT8 halves bandwidth need; INT4 quarters it — enabling the same TPS target on fewer or lower-TDP GPUs.</span></span>: INT8 halves bandwidth need, INT4 quarters it.</p>
+
+    <p><strong>Step 5 — Check TTFT.</strong> <code>TTFT = Prompt_length × FLOPs_per_token ÷ (TFLOPS × MFU × 10¹²)</code>. If this exceeds your budget, either increase GPU compute or impose a maximum prompt length.</p>
+
+    <p><strong>Step 6 — Validate total cost.</strong> Compute monthly OpEx (power) + amortized CapEx, then divide by expected tokens/month to get $/token.</p>
+
+    <div class="callout"><strong>When Step 4 fails,</strong> do not automatically add GPUs. Try quantization first — INT4 often allows the same TPS on half the GPU count at one-quarter the bandwidth cost, yielding a better price-to-performance ratio.</div>
+
+    <div class="page-nav">
+      <button onclick="go(7)">← Previous</button>
+      <span>Page 8 of 11</span>
+      <button onclick="go(9)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 9 — Reference Tables -->
+  <div class="pg" id="p9">
+    <div class="page-header">
+      <span>Part VIII — Reference Tables</span>
+      <span class="page-num">9</span>
+    </div>
+
+    <h2><span class="sec-num">VIII.</span> Reference Tables</h2>
+
+    <h3>GPU performance (2024 – 2025)</h3>
+
+    <table>
+      <thead><tr><th>GPU</th><th>Tensor TFLOPS (BF16)</th><th>Mem BW</th><th>VRAM</th><th>TDP</th><th>Ridge pt.</th></tr></thead>
+      <tbody>
+        <tr><td>RTX 4060 Ti</td><td>22</td><td>288 GB/s</td><td>16 GB</td><td>165 W</td><td>76</td></tr>
+        <tr><td>RTX 4090</td><td>83</td><td>1,008 GB/s</td><td>24 GB</td><td>450 W</td><td>82</td></tr>
+        <tr><td>A100 40 GB</td><td>312</td><td>1,555 GB/s</td><td>40 GB</td><td>400 W</td><td>201</td></tr>
+        <tr><td>A100 80 GB</td><td>312</td><td>2,000 GB/s</td><td>80 GB</td><td>400 W</td><td>156</td></tr>
+        <tr><td>H100 SXM</td><td>989</td><td>3,350 GB/s</td><td>80 GB</td><td>700 W</td><td>295</td></tr>
+        <tr><td>H200 SXM</td><td>989</td><td>4,800 GB/s</td><td>141 GB</td><td>700 W</td><td>206</td></tr>
+        <tr><td>MI300X</td><td>1,307</td><td>5,300 GB/s</td><td>192 GB</td><td>750 W</td><td>247</td></tr>
+      </tbody>
+    </table>
+
+    <p style="font-size:0.78rem;color:var(--ink3);margin-top:-0.8em;margin-bottom:1.4em;"><span class="kw" tabindex="0">Ridge point<span class="tip">= TFLOPS × 1000 ÷ BW_GBps. Batch sizes above this value put the GPU in compute-bound territory; below this, bandwidth is the limit. Most serving workloads operate well below the ridge point.</span></span> = TFLOPS × 1000 ÷ BW_GBps. Batch sizes above this are compute-bound.</p>
+
+    <h3>CPU memory bandwidth</h3>
+
+    <table>
+      <thead><tr><th>CPU</th><th>Cores</th><th>Max BW</th><th>TDP</th></tr></thead>
+      <tbody>
+        <tr><td>Intel Xeon Gold 6526Y</td><td>16</td><td>307 GB/s</td><td>195 W</td></tr>
+        <tr><td>AMD EPYC 9654</td><td>96</td><td>461 GB/s</td><td>360 W</td></tr>
+        <tr><td>AMD EPYC 9965</td><td>192</td><td>576 GB/s</td><td>500 W</td></tr>
+        <tr><td>AWS Graviton4</td><td>96</td><td>537 GB/s</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Common model architectures</h3>
+
+    <table>
+      <thead><tr><th>Model</th><th>Params</th><th>Layers</th><th>D_model</th><th>KV/token (FP16)</th></tr></thead>
+      <tbody>
+        <tr><td>Llama 3 8 B</td><td>8 B</td><td>32</td><td>4,096</td><td>0.5 MB</td></tr>
+        <tr><td>Llama 3 70 B</td><td>70 B</td><td>80</td><td>8,192</td><td>2.5 MB</td></tr>
+        <tr><td>Mistral 7 B</td><td>7 B</td><td>32</td><td>4,096</td><td>0.5 MB</td></tr>
+        <tr><td>Mixtral 8×7 B</td><td>47 B</td><td>32</td><td>4,096</td><td>0.5 MB</td></tr>
+        <tr><td>Gemma 2 27 B</td><td>27 B</td><td>46</td><td>4,608</td><td>0.85 MB</td></tr>
+        <tr><td>Qwen 2.5 72 B</td><td>72 B</td><td>80</td><td>8,192</td><td>2.5 MB</td></tr>
+      </tbody>
+    </table>
+
+    <div class="page-nav">
+      <button onclick="go(8)">← Previous</button>
+      <span>Page 9 of 11</span>
+      <button onclick="go(10)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 10 — Worked Examples -->
+  <div class="pg" id="p10">
+    <div class="page-header">
+      <span>Part IX — Worked Examples</span>
+      <span class="page-num">10</span>
+    </div>
+
+    <h2><span class="sec-num">IX.</span> Worked Examples</h2>
+
+    <h3>Example A — Consumer GPU chatbot (7 B, single GPU)</h3>
+    <p><em>Requirements:</em> 50 <span class="kw" tabindex="0">tok/s<span class="tip">Tokens per second — the throughput target. 50 tok/s is comfortable for a single interactive user seeing text stream in real-time.</span></span>, 4,096 context, Llama 3 8 B, &lt; $500/month.</p>
+
+    <div class="callout">
+      <strong>Step 1 — VRAM:</strong> 8B × 0.5 bytes (INT4) = 4 GB weights. KV at batch 4, 4K ctx: 4 × 4096 × 0.5 MB = 8.2 GB. Overhead 0.8 GB. <strong>Total ≈ 13 GB → RTX 4060 Ti 16 GB fits.</strong><br><br>
+      <strong>Step 2 — BW check:</strong> Required = 4 GB × 50 ÷ 4 = 50 GB/s. RTX 4060 Ti: 288 GB/s &gt;&gt; 50. ✓<br><br>
+      <strong>Step 3 — Power:</strong> 165 W × 720 h × 1.1 × $0.12 = $15.6/month. ✓<br><br>
+      <strong>Result: RTX 4060 Ti 16 GB with INT4 via llama.cpp → ~100 tok/s actual (2× headroom).</strong>
+    </div>
+
+    <h3>Example B — Production API (70 B, data center)</h3>
+    <p><em>Requirements:</em> 2,000 tok/s, 8,192 context, Llama 3 70 B FP16, &lt; 4 kW.</p>
+
+    <div class="callout">
+      <strong>Step 1 — VRAM:</strong> 140 GB weights + ~82 GB KV (batch 4, 8K, INT8 KV) + 30 GB overhead = 252 GB → 4× H100 SXM (320 GB). Use paged attention.<br><br>
+      <strong>Step 2 — BW check:</strong> Required per GPU = 140 GB × 2,000 ÷ (16 × 4) = 10,937 GB/s per GPU. H100 at 3,350 GB/s — needs batch ≥ 4 to amortize. At batch 16: feasible. ✓<br><br>
+      <strong>Step 3 — Power:</strong> 4 × 700 W = 2.8 kW + 0.6 kW server = 3.4 kW &lt; 4 kW. ✓<br><br>
+      <strong>Result: 4× H100 SXM, TensorRT-LLM, TP=4, INT8 KV cache → ~2,200 tok/s.</strong>
+    </div>
+
+    <h3>Example C — CPU-only edge server (7 B)</h3>
+    <p><em>Requirements:</em> 20 tok/s offline, Mistral 7 B INT4, no GPU.</p>
+
+    <div class="callout">
+      Model size = 7B × 0.5 bytes = 3.5 GB<br>
+      Required BW = 3.5 GB × 20 = 70 GB/s<br>
+      AMD EPYC 9654: 461 GB/s &gt;&gt; 70 GB/s<br>
+      Expected TPS = 461 ÷ 3.5 × 0.80 ≈ <strong>105 tok/s</strong> (5× headroom)<br><br>
+      <strong>Result: Any modern server CPU suffices. Use llama.cpp with AVX-512.</strong>
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(9)">← Previous</button>
+      <span>Page 10 of 11</span>
+      <button onclick="go(11)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 11 — Formula Sheet -->
+  <div class="pg" id="p11">
+    <div class="page-header">
+      <span>Part X — Quick Reference</span>
+      <span class="page-num">11</span>
+    </div>
+
+    <h2><span class="sec-num">X.</span> Quick Formula Sheet</h2>
+
+    <h3>Core identities</h3>
+    <pre>
+FLOPs per token     = 2 × N_params
+VRAM weights        = N_params × dtype_bytes
+KV per token        = 2 × N_layers × D_model × dtype_bytes
+
+TPS (BW-bound)      = Mem_BW_GBps ÷ (model_GB ÷ batch)
+TPS (compute-bound) = TFLOPS × 10¹² ÷ (2 × N_params) × MFU
+TPS (actual)        = min(TPS_BW, TPS_compute) × MFU
+
+Ridge point         = TFLOPS × 1000 ÷ Mem_BW_GBps
+
+J per token         = P_watts ÷ TPS
+Cost per M tokens   = (J/tok × 10⁶ ÷ 3.6 × 10⁶) × $/kWh × PUE
+    </pre>
+
+    <h3>Typical MFU values</h3>
+    <table>
+      <thead><tr><th>Runtime</th><th>Hardware</th><th>MFU range</th></tr></thead>
+      <tbody>
+        <tr><td>llama.cpp</td><td>CPU</td><td>0.05 – 0.15</td></tr>
+        <tr><td>Naive PyTorch</td><td>GPU</td><td>0.10 – 0.25</td></tr>
+        <tr><td>vLLM</td><td>GPU</td><td>0.30 – 0.50</td></tr>
+        <tr><td>TensorRT-LLM</td><td>GPU</td><td>0.40 – 0.55</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Bytes per weight by precision</h3>
+    <table>
+      <thead><tr><th>Format</th><th>Bytes</th><th>Relative VRAM</th></tr></thead>
+      <tbody>
+        <tr><td>FP32</td><td>4.0</td><td>4×</td></tr>
+        <tr><td>FP16 / BF16</td><td>2.0</td><td>2×</td></tr>
+        <tr><td>INT8</td><td>1.0</td><td>1×</td></tr>
+        <tr><td>INT4</td><td>0.5</td><td>0.5×</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Recommended tools</h3>
+    <table>
+      <thead><tr><th>Tool</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td><code>vLLM</code></td><td>Production GPU serving, continuous batching, paged KV</td></tr>
+        <tr><td><code>TensorRT-LLM</code></td><td>Maximum NVIDIA GPU throughput</td></tr>
+        <tr><td><code>llama.cpp</code></td><td>CPU inference, quantized edge deployment</td></tr>
+        <tr><td><code>AutoAWQ</code></td><td>INT4 quantization with best quality (activation-aware)</td></tr>
+        <tr><td><code>ExLlamaV2</code></td><td>High-efficiency GPTQ/EXL2 on consumer GPUs</td></tr>
+      </tbody>
+    </table>
+
+    <hr>
+    <p style="font-size:0.82rem;color:var(--ink3);text-align:center;">LLM Inference Engineering Reference · v1.0 · Cross-check hardware specs against vendor datasheets before procurement.</p>
+
+    <div class="page-nav">
+      <button onclick="go(10)">← Previous</button>
+      <span>Page 11 of 11</span>
+      <button disabled>Next →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function go(n) {
+    document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
+    document.getElementById('p' + n).classList.add('active');
+    document.getElementById('book').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
+</body>
+</html>
