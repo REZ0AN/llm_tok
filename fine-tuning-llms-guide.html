@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fine-tuning LLMs Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a18;
+    --ink2: #3a3a36;
+    --ink3: #6a6a64;
+    --paper: #f7f4ee;
+    --paper2: #ede9e0;
+    --rule: #c8c2b0;
+    --accent: #8b3a2a;
+    --link: #2a5a8b;
+    --font-body: 'Crimson Pro', Georgia, serif;
+    --font-code: 'Source Code Pro', 'Courier New', monospace;
+    --page-w: 680px;
+  }
+
+  --nav-bg: #2c2a26; --nav-text: #e8e4d8; --nav-muted: #9a9488;
+    --nav-hover: #3d3a34; --nav-active: #8b3a2a;
+  }
+  html { background: #d0cbbf; font-size: 17px; }
+  body { font-family: var(--font-body); color: var(--ink); line-height: 1.75; background: #d0cbbf; margin: 0; }
+  .top-nav { position: sticky; top: 0; z-index: 200; background: var(--nav-bg); display: flex; align-items: stretch; padding: 0 24px; height: 44px; gap: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.28); }
+  .nav-brand { font-family: var(--font-body); font-size: 0.82rem; font-weight: 600; color: var(--nav-text); letter-spacing: 0.04em; display: flex; align-items: center; padding-right: 20px; border-right: 1px solid #3d3a34; white-space: nowrap; text-decoration: none; }
+  .nav-books { display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; flex: 1; }
+  .nav-books::-webkit-scrollbar { display: none; }
+  .nav-book { font-family: var(--font-body); font-size: 0.75rem; color: var(--nav-muted); padding: 0 16px; display: flex; align-items: center; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; white-space: nowrap; letter-spacing: 0.02em; transition: color 0.15s, border-color 0.15s, background 0.15s; text-decoration: none; }
+  .nav-book:hover { color: var(--nav-text); background: var(--nav-hover); }
+  .nav-book.active { color: #e8c4a0; border-bottom-color: var(--nav-active); }
+  .nav-divider { width: 1px; background: #3d3a34; margin: 8px 0; flex-shrink: 0; }
+
+  .page {
+    background: var(--paper);
+    width: var(--page-w);
+    margin: 2rem auto;
+    padding: 64px 72px 80px;
+    box-shadow: 3px 3px 18px rgba(0,0,0,0.22), -1px -1px 4px rgba(0,0,0,0.08);
+    position: relative;
+    min-height: 900px;
+  }
+
+  .page::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 56px; bottom: 0;
+    width: 1px;
+    background: rgba(180,100,80,0.18);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 8px;
+    margin-bottom: 48px;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  .page-num { font-size: 0.72rem; color: var(--ink3); }
+
+  h1 { font-size: 2rem; font-weight: 600; line-height: 1.2; margin-bottom: 0.3em; color: var(--ink); }
+  h2 { font-size: 1.35rem; font-weight: 600; margin: 2.4em 0 0.6em; padding-bottom: 4px; border-bottom: 1px solid var(--rule); color: var(--ink); }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 1.8em 0 0.4em; color: var(--ink2); }
+  p { margin-bottom: 0.9em; }
+
+  .subtitle { font-style: italic; color: var(--ink3); font-size: 1.05rem; margin-bottom: 0.2em; }
+  .meta { font-size: 0.8rem; color: var(--ink3); margin-bottom: 2em; padding-bottom: 1.5em; border-bottom: 2px solid var(--rule); }
+
+  .kw {
+    color: var(--accent); font-style: italic; cursor: help;
+    border-bottom: 1px dotted var(--accent);
+    position: relative; display: inline;
+  }
+  .kw .tip {
+    visibility: hidden; opacity: 0; pointer-events: none;
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink); color: #f0ece2;
+    font-family: var(--font-body); font-style: normal;
+    font-size: 0.78rem; line-height: 1.55;
+    padding: 9px 12px; border-radius: 3px; width: 260px;
+    z-index: 100; transition: opacity 0.15s ease, visibility 0.15s ease;
+    box-shadow: 2px 3px 10px rgba(0,0,0,0.35); white-space: normal;
+  }
+  .kw .tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--ink);
+  }
+  .kw:hover .tip, .kw:focus .tip { visibility: visible; opacity: 1; }
+
+  pre {
+    background: var(--paper2); border-left: 3px solid var(--rule);
+    padding: 12px 16px; font-family: var(--font-code);
+    font-size: 0.72rem; line-height: 1.6;
+    margin: 1.2em 0 1.4em; overflow-x: auto; color: var(--ink2);
+  }
+
+  code {
+    font-family: var(--font-code); font-size: 0.82em;
+    background: var(--paper2); padding: 1px 4px;
+    border-radius: 2px; color: var(--ink2);
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 1.2em 0 1.6em; }
+  th { text-align: left; font-weight: 600; border-bottom: 2px solid var(--rule); padding: 5px 10px 5px 0; font-size: 0.8rem; letter-spacing: 0.04em; color: var(--ink2); }
+  td { border-bottom: 1px solid var(--paper2); padding: 5px 10px 5px 0; vertical-align: top; color: var(--ink2); }
+  tr:last-child td { border-bottom: none; }
+
+  .callout {
+    border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    background: var(--paper2); padding: 12px 16px;
+    margin: 1.4em 0; font-size: 0.88rem; color: var(--ink2);
+  }
+  .callout strong { color: var(--accent); }
+
+  .callout.info { border-left-color: #2a5a8b; }
+  .callout.info strong { color: #2a5a8b; }
+
+  ol, ul { padding-left: 1.4em; margin-bottom: 0.9em; }
+  li { margin-bottom: 0.4em; font-size: 0.95rem; color: var(--ink2); }
+
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2em 0; }
+
+  .toc { margin: 1.4em 0 0; }
+  .toc-item { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; font-size: 0.92rem; color: var(--ink2); }
+  .toc-item .toc-dots { flex: 1; border-bottom: 1px dotted var(--rule); margin-bottom: 3px; }
+  .toc-item .toc-pg { color: var(--ink3); font-size: 0.82rem; min-width: 20px; text-align: right; }
+  .toc-part { font-size: 0.75rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink3); margin-top: 1em; padding-top: 0.4em; border-top: 1px solid var(--rule); }
+
+  .sec-num { color: var(--ink3); font-size: 0.85em; margin-right: 0.4em; }
+
+  .page-nav {
+    display: flex; justify-content: space-between;
+    margin-top: 48px; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8rem; color: var(--ink3); align-items: center;
+  }
+  .page-nav button {
+    background: none; border: 1px solid var(--rule);
+    padding: 4px 14px; font-family: var(--font-body);
+    font-size: 0.82rem; cursor: pointer;
+    color: var(--ink2); border-radius: 2px;
+  }
+  .page-nav button:hover { background: var(--paper2); }
+  .page-nav button:disabled { opacity: 0.3; cursor: default; }
+
+  .pg { display: none; }
+  .pg.active { display: block; }
+
+  a { color: var(--link); }
+  a:hover { text-decoration: underline; }
+
+  .book-link {
+    display: inline-block;
+    margin-top: 1.8em;
+    padding: 8px 20px;
+    border: 1px solid var(--rule);
+    background: var(--paper2);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    color: var(--ink2);
+    text-decoration: none;
+    border-radius: 2px;
+    border-left: 3px solid var(--accent);
+  }
+  .book-link:hover { background: #e4dfd3; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <span class="nav-brand">LLM Engineering Library</span>
+  <div class="nav-books">
+    <a class="nav-book" href="index.html">LLM Inference Engineering</a>
+    <div class="nav-divider"></div>
+    <span class="nav-book active">Fine-tuning Guide</span>
+    <div class="nav-divider"></div>
+    <a class="nav-book" href="unsloth-kernels-packing.html">Kernels &amp; Packing</a>
+    <div class="nav-divider"></div>
+    <a class="nav-book" href="qat-guide.html">QAT</a>
+  </div>
+</nav>
+
+<div class="page" id="book">
+
+  <!-- PAGE 1 — Title & TOC -->
+  <div class="pg active" id="p1">
+    <div class="page-header">
+      <span>Fine-tuning LLMs Guide</span>
+      <span class="page-num">i</span>
+    </div>
+
+    <h1>Fine-tuning LLMs<br>Guide</h1>
+    <p class="subtitle">Supervised Fine-Tuning, LoRA, QLoRA, RL &amp; Deployment</p>
+    <p class="meta">Adapted from Unsloth Documentation &nbsp;·&nbsp; Companion to LLM Inference Engineering</p>
+
+    <h2>Table of Contents</h2>
+    <div class="toc">
+      <div class="toc-part">Concepts</div>
+      <div class="toc-item"><span>1. What is Fine-tuning?</span><span class="toc-dots"></span><span class="toc-pg">2</span></div>
+      <div class="toc-item"><span>2. Choose the Right Model &amp; Method</span><span class="toc-dots"></span><span class="toc-pg">3</span></div>
+      <div class="toc-part">Preparation</div>
+      <div class="toc-item"><span>3. Your Dataset</span><span class="toc-dots"></span><span class="toc-pg">4</span></div>
+      <div class="toc-item"><span>4. Training Hyperparameters</span><span class="toc-dots"></span><span class="toc-pg">5</span></div>
+      <div class="toc-part">Execution</div>
+      <div class="toc-item"><span>5. Install &amp; Requirements</span><span class="toc-dots"></span><span class="toc-pg">6</span></div>
+      <div class="toc-item"><span>6. Training &amp; Evaluation</span><span class="toc-dots"></span><span class="toc-pg">7</span></div>
+      <div class="toc-item"><span>7. Running &amp; Deploying</span><span class="toc-dots"></span><span class="toc-pg">8</span></div>
+      <div class="toc-item"><span>8. Summary &amp; Next Steps</span><span class="toc-dots"></span><span class="toc-pg">9</span></div>
+    </div>
+
+    <div class="callout" style="margin-top:2.4em;">
+      <strong>How to read this document.</strong> Technical terms are shown in <span class="kw" tabindex="0">italic red<span class="tip">Hover over any red italic term to see its definition inline.</span></span>. Hover or tap them to see a definition tooltip. This guide is a companion to the <em>LLM Inference Engineering</em> book — concepts like VRAM, TPS, and quantization are cross-referenced from there.
+    </div>
+
+    <div class="page-nav">
+      <button disabled>← Previous</button>
+      <span>Page 1 of 9</span>
+      <button onclick="go(2)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2 — What is Fine-tuning -->
+  <div class="pg" id="p2">
+    <div class="page-header">
+      <span>Chapter 1 — What is Fine-tuning?</span>
+      <span class="page-num">2</span>
+    </div>
+
+    <h2><span class="sec-num">1.</span> What Is Fine-tuning?</h2>
+
+    <p>Fine-tuning — also called post-training — customizes a pre-trained model's behavior, enhances and injects new knowledge, and optimizes performance for specific domains or tasks.</p>
+
+    <p>For example, OpenAI's GPT-4 was post-trained to improve instruction following and helpful chat behavior. The standard method of post-training is called <span class="kw" tabindex="0">Supervised Fine-Tuning<span class="tip">SFT — the most common fine-tuning method. You provide labeled input-output pairs (e.g., question → answer) and the model learns to replicate them. Think of it as teaching by example.</span></span> (SFT). Other methods include:</p>
+
+    <ul>
+      <li><span class="kw" tabindex="0">DPO / ORPO<span class="tip">Direct Preference Optimization / Odds Ratio Preference Optimization — preference-based fine-tuning methods where the model is trained on pairs of responses ranked by human preference, without needing a separate reward model.</span></span> — preference optimization methods</li>
+      <li><span class="kw" tabindex="0">Reinforcement Learning<span class="tip">RL — an agent learns by interacting with an environment and receiving rewards or penalties. For LLMs, this means generating responses and scoring them with a reward function. GRPO and GSPO are popular RL variants for LLMs.</span></span> (GRPO, GSPO) — reward-based learning</li>
+      <li><span class="kw" tabindex="0">Distillation<span class="tip">Knowledge distillation — training a smaller "student" model to mimic the outputs of a larger "teacher" model. Produces compact models that retain much of the teacher's capability.</span></span> — compressing large model knowledge into smaller ones</li>
+    </ul>
+
+    <p>By fine-tuning a pre-trained model on a dataset, you can:</p>
+
+    <ul>
+      <li><strong>Update + learn new knowledge</strong> — inject domain-specific information the base model never saw.</li>
+      <li><strong>Customize behavior</strong> — adjust tone, personality, or response style.</li>
+      <li><strong>Optimize for tasks</strong> — improve accuracy for specific use cases like legal analysis, customer support, or code generation.</li>
+    </ul>
+
+    <h3>Fine-tuning vs. RAG</h3>
+
+    <p>A common misconception is that fine-tuning cannot teach new knowledge, or that <span class="kw" tabindex="0">RAG<span class="tip">Retrieval-Augmented Generation — a technique that retrieves relevant documents at inference time and injects them into the prompt. RAG cannot change the model's weights; it only augments what the model sees. Fine-tuning changes the weights permanently.</span></span> outperforms fine-tuning. This is false. Fine-tuning can replicate all of RAG's capabilities, but not vice versa — RAG can only augment what the model sees at inference time; it cannot change the model's weights.</p>
+
+    <h3>What is LoRA / QLoRA?</h3>
+
+    <p>Instead of updating all 70 billion numbers in a model like Llama 70B, <span class="kw" tabindex="0">LoRA<span class="tip">Low-Rank Adaptation — adds two thin matrices A and B alongside each weight matrix. Only A and B are trained, representing roughly 1% of total parameters. The original weights stay frozen. This makes fine-tuning fast and memory-efficient.</span></span> adds two thin matrices A and B to each weight and optimizes only those — roughly 1% of all weights. The original model weights remain frozen.</p>
+
+    <p><span class="kw" tabindex="0">QLoRA<span class="tip">Quantized LoRA — combines LoRA adapters with 4-bit quantization of the base model. The base model is loaded in INT4 (saving 75% VRAM) while the LoRA adapters train in 16-bit. This enables fine-tuning very large models on consumer GPUs.</span></span> extends LoRA by also quantizing the base model to 4-bit, saving 75% memory. This makes it possible to fine-tune large models on consumer hardware with as little as 3 GB VRAM.</p>
+
+    <div class="callout">
+      <strong>Rule of thumb.</strong> Think of a fine-tuned model as a specialist — a generalist doctor who completed a residency in cardiology. The base model is the medical school education; fine-tuning is the residency.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(1)">← Previous</button>
+      <span>Page 2 of 9</span>
+      <button onclick="go(3)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 3 — Model & Method -->
+  <div class="pg" id="p3">
+    <div class="page-header">
+      <span>Chapter 2 — Choose the Right Model &amp; Method</span>
+      <span class="page-num">3</span>
+    </div>
+
+    <h2><span class="sec-num">2.</span> Choose the Right Model &amp; Method</h2>
+
+    <p>If you are a beginner, start with a small instruct model like Llama 3.1 8B and experiment from there. You will also need to choose a training method.</p>
+
+    <h3>Training method comparison</h3>
+
+    <table>
+      <thead><tr><th>Method</th><th>When to use</th><th>VRAM cost</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="kw" tabindex="0">QLoRA<span class="tip">Quantized LoRA — trains LoRA adapters on top of a 4-bit quantized base model. Best starting point for most use cases. Unsloth's dynamic 4-bit quants recover most accuracy lost by standard INT4 quantization.</span></span></td>
+          <td>Most use cases, recommended starting point</td>
+          <td>Lowest (~3 GB for 7B)</td>
+        </tr>
+        <tr>
+          <td><span class="kw" tabindex="0">LoRA<span class="tip">Low-Rank Adaptation — trains small adapter matrices on a 16-bit frozen base model. Slightly more VRAM than QLoRA but higher precision. When done correctly, LoRA can match full fine-tuning.</span></span></td>
+          <td>When precision matters more than memory</td>
+          <td>Medium (16-bit base)</td>
+        </tr>
+        <tr>
+          <td><span class="kw" tabindex="0">SFT<span class="tip">Supervised Fine-Tuning — the standard method. You provide labeled examples (question → answer pairs) and the model learns from them. Works for most tasks: chatbots, classification, extraction, summarization.</span></span> (Full fine-tune)</td>
+          <td>Rarely needed; try LoRA first</td>
+          <td>Very high</td>
+        </tr>
+        <tr>
+          <td><span class="kw" tabindex="0">RL / GRPO<span class="tip">Reinforcement Learning / Group Relative Policy Optimization — used when you need the model to excel at a specific behavior (e.g., tool-calling, math reasoning) by optimizing a reward function rather than labeled examples.</span></span></td>
+          <td>Specific behavior mastery (reasoning, tool-calling)</td>
+          <td>Medium–High</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>Research insight.</strong> Training and serving in the same precision helps preserve accuracy. If you plan to serve in 4-bit, train in 4-bit — and vice versa.
+    </div>
+
+    <h3>Instruct vs. base models</h3>
+
+    <p><span class="kw" tabindex="0">Instruct models<span class="tip">Models already fine-tuned for instruction following and conversation. They understand chat templates (ChatML, ShareGPT) and require less data to further fine-tune. Recommended for beginners.</span></span> allow direct fine-tuning using conversational chat templates and require less data. <span class="kw" tabindex="0">Base models<span class="tip">Raw pre-trained models with no instruction tuning. They require more data and careful prompt formatting (Alpaca, Vicuna templates) to fine-tune effectively. Better for pretraining-style tasks or building a new chat model from scratch.</span></span> require more data and careful formatting — use them only when building from scratch.</p>
+
+    <h3>Key model settings</h3>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Default</th><th>What it controls</th></tr></thead>
+      <tbody>
+        <tr><td><code>max_seq_length</code></td><td>2048</td><td>Context window during training. Start low; increase if needed.</td></tr>
+        <tr><td><code>load_in_4bit</code></td><td>True</td><td>Enables QLoRA (4-bit base model). Set False for LoRA 16-bit.</td></tr>
+        <tr><td><code>dtype</code></td><td>None</td><td>Auto-detects. Set <code>bfloat16</code> explicitly for newer GPUs.</td></tr>
+        <tr><td><code>full_finetuning</code></td><td>False</td><td>Enables full fine-tune (FFT). Almost never needed.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <strong>Common mistake.</strong> Jumping straight to full fine-tuning (FFT) because LoRA seems insufficient. Start with QLoRA. If it fails, LoRA won't save it either — and neither will FFT. The problem is almost always the dataset.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(2)">← Previous</button>
+      <span>Page 3 of 9</span>
+      <button onclick="go(4)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 4 — Dataset -->
+  <div class="pg" id="p4">
+    <div class="page-header">
+      <span>Chapter 3 — Your Dataset</span>
+      <span class="page-num">4</span>
+    </div>
+
+    <h2><span class="sec-num">3.</span> Your Dataset</h2>
+
+    <p>For LLMs, datasets are collections of text data used to train the model. The quality and quantity of your dataset will largely determine the outcome of your fine-tune — this is the most important step.</p>
+
+    <h3>Basic structure</h3>
+
+    <p>Most fine-tuning datasets require at minimum two columns: a question (or instruction) and an answer (or response). This is called a <span class="kw" tabindex="0">QA pair<span class="tip">Question-Answer pair — the fundamental unit of supervised fine-tuning data. The model learns to map a given input (question/instruction) to a desired output (answer/response). Quality of QA pairs matters far more than sheer quantity.</span></span>.</p>
+
+    <pre>
+{ "instruction": "Summarize this legal contract section.",
+  "input": "Party A agrees to pay Party B...",
+  "output": "Party A must pay Party B within 30 days..." }
+    </pre>
+
+    <h3>How to create your dataset</h3>
+
+    <ul>
+      <li><strong>Synthetically generate data</strong> using ChatGPT or a local LLM to create structured QA pairs from raw documents.</li>
+      <li><strong>Use Unsloth's Synthetic Dataset notebook</strong> — automatically parses PDFs, videos, and documents, generates QA pairs, and auto-cleans using Llama 3.2.</li>
+      <li><strong>Curate manually</strong> for highest quality. Even 200–500 high-quality examples can outperform 10,000 noisy ones.</li>
+    </ul>
+
+    <h3>Format by use case</h3>
+
+    <table>
+      <thead><tr><th>Use case</th><th>Recommended format</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Chatbot / assistant</td><td>ChatML / ShareGPT</td><td>Multi-turn conversation format</td></tr>
+        <tr><td>Instruction following</td><td>Alpaca</td><td>instruction + input + output triplets</td></tr>
+        <tr><td>Code generation</td><td>Raw code dumps</td><td>Structure less critical for code tasks</td></tr>
+        <tr><td>Classification</td><td>QA pairs</td><td>Label set in answer column</td></tr>
+        <tr><td>Vision / multimodal</td><td>Image + text pairs</td><td>Images embedded in answer output</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <strong>Exception for code.</strong> Dumping raw code without QA structure can still yield significant improvements for code-focused fine-tunes. The structured QA recommendation applies primarily to conversational and instruction-following tasks.
+    </div>
+
+    <h3>Dataset size guidance</h3>
+
+    <p>There is no universal rule, but as a rough starting point: for a <span class="kw" tabindex="0">LoRA<span class="tip">Low-Rank Adaptation fine-tune — because only a small fraction of weights are updated, LoRA requires far less data than full fine-tuning to achieve good results. 500–5,000 high-quality examples is a common effective range.</span></span> fine-tune, 500 to 5,000 high-quality QA pairs is a reasonable starting range. Quality consistently outperforms quantity.</p>
+
+    <div class="page-nav">
+      <button onclick="go(3)">← Previous</button>
+      <span>Page 4 of 9</span>
+      <button onclick="go(5)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 5 — Hyperparameters -->
+  <div class="pg" id="p5">
+    <div class="page-header">
+      <span>Chapter 4 — Training Hyperparameters</span>
+      <span class="page-num">5</span>
+    </div>
+
+    <h2><span class="sec-num">4.</span> Training Hyperparameters</h2>
+
+    <p><span class="kw" tabindex="0">Hyperparameters<span class="tip">Settings that control how training proceeds — not the model weights themselves. Examples: learning rate, batch size, number of epochs. They are set before training and tuned through experimentation.</span></span> are settings you configure before training begins. They control speed, memory usage, and how well the model learns from your data.</p>
+
+    <h3>LoRA-specific parameters</h3>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Typical value</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>r</code> (rank)</td><td>8 – 64</td>
+          <td><span class="kw" tabindex="0">LoRA rank<span class="tip">Controls the size of the A and B adapter matrices. Higher rank = more parameters trained = more expressive but more memory. Start at r=16; increase only if the model underfits.</span></span> — higher = more capacity, more memory.</td>
+        </tr>
+        <tr>
+          <td><code>lora_alpha</code></td><td>= r or 2r</td>
+          <td>Scaling factor for LoRA updates. Set equal to rank as a starting point.</td>
+        </tr>
+        <tr>
+          <td><code>lora_dropout</code></td><td>0 – 0.1</td>
+          <td><span class="kw" tabindex="0">Dropout<span class="tip">Randomly zeroes out a fraction of activations during training to prevent overfitting. A value of 0.05 means 5% of activations are dropped per step. Set to 0 for small datasets to preserve signal.</span></span> rate on LoRA layers. Use 0 for small datasets.</td>
+        </tr>
+        <tr>
+          <td><code>target_modules</code></td><td>q, k, v, o, gate</td>
+          <td>Which weight matrices to apply LoRA to. More modules = more capacity.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Training loop parameters</h3>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Default</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>per_device_train_batch_size</code></td><td>2</td>
+          <td><span class="kw" tabindex="0">Batch size<span class="tip">Number of training examples processed per gradient update step. Larger batch = more stable gradients but more VRAM. Prefer increasing gradient_accumulation_steps over batch size to avoid padding overhead.</span></span> per GPU. Increase carefully to avoid padding waste.</td>
+        </tr>
+        <tr>
+          <td><code>gradient_accumulation_steps</code></td><td>4</td>
+          <td><span class="kw" tabindex="0">Gradient accumulation<span class="tip">Simulates a larger batch size by accumulating gradients over N steps before updating weights. Effective batch = batch_size × accumulation_steps. Keeps VRAM low while stabilizing training.</span></span> — simulates larger batch without extra VRAM.</td>
+        </tr>
+        <tr>
+          <td><code>learning_rate</code></td><td>2e-4</td>
+          <td><span class="kw" tabindex="0">Learning rate<span class="tip">Controls how large each weight update step is. Too high = unstable training (loss spikes). Too low = very slow convergence. For LoRA fine-tuning, 1e-4 to 2e-4 is a common safe range. Reduce to 5e-5 or 2e-5 for more precise fine-tuning.</span></span> — lower = slower but more precise. Try 1e-4, 5e-5, 2e-5.</td>
+        </tr>
+        <tr>
+          <td><code>num_train_epochs</code></td><td>1 – 3</td>
+          <td><span class="kw" tabindex="0">Epochs<span class="tip">One full pass through the entire training dataset. 1–3 epochs is typical for fine-tuning to avoid overfitting. More epochs on small datasets risks memorization rather than generalization.</span></span> — 1–3 recommended to avoid overfitting.</td>
+        </tr>
+        <tr>
+          <td><code>max_steps</code></td><td>60</td>
+          <td>Hard cap on training steps. Use <code>num_train_epochs</code> for full runs.</td>
+        </tr>
+        <tr>
+          <td><code>warmup_steps</code></td><td>5 – 10% of steps</td>
+          <td>Gradually ramps up learning rate at start to stabilize early training.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <strong>Start conservative.</strong> Use the defaults for your first run. Only tune hyperparameters once you have a baseline result — change one variable at a time so you can tell what actually helped.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(4)">← Previous</button>
+      <span>Page 5 of 9</span>
+      <button onclick="go(6)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 6 — Install -->
+  <div class="pg" id="p6">
+    <div class="page-header">
+      <span>Chapter 5 — Install &amp; Requirements</span>
+      <span class="page-num">6</span>
+    </div>
+
+    <h2><span class="sec-num">5.</span> Install &amp; Requirements</h2>
+
+    <p>You can use Unsloth via two main routes: free cloud notebooks or a local installation.</p>
+
+    <h3>Option A — Unsloth notebooks (recommended for beginners)</h3>
+
+    <p>Unsloth provides pre-made step-by-step notebooks on Google Colab and Kaggle. These require no local setup and run on free GPU instances. Notebooks are available for:</p>
+
+    <ul>
+      <li>Standard <span class="kw" tabindex="0">SFT<span class="tip">Supervised Fine-Tuning — the most common notebook type. Covers loading a model, preparing a dataset, running training, and saving the adapter.</span></span> fine-tuning (Llama, Mistral, Qwen, Gemma)</li>
+      <li>Vision and multimodal fine-tuning</li>
+      <li>Text-to-speech (TTS) fine-tuning</li>
+      <li>Reasoning via <span class="kw" tabindex="0">GRPO<span class="tip">Group Relative Policy Optimization — an RL variant that trains the model to produce higher-reward outputs by comparing groups of responses. Used for reasoning, math, and tool-use tasks.</span></span></li>
+      <li>Embedding model fine-tuning</li>
+    </ul>
+
+    <h3>Option B — Local installation</h3>
+
+    <pre>
+# Linux / WSL
+pip install unsloth
+
+# Windows (requires WSL or native Linux)
+# See: unsloth.ai/docs/get-started/install/windows-installation
+
+# Docker
+# See: unsloth.ai/docs/get-started/install/docker
+    </pre>
+
+    <h3>Minimum hardware requirements</h3>
+
+    <table>
+      <thead><tr><th>Task</th><th>Min VRAM</th><th>Recommended GPU</th></tr></thead>
+      <tbody>
+        <tr><td>QLoRA on 7–8B model</td><td>6 GB</td><td>RTX 3060 / T4</td></tr>
+        <tr><td>QLoRA on 13B model</td><td>10 GB</td><td>RTX 3080 / V100</td></tr>
+        <tr><td>QLoRA on 70B model</td><td>40 GB</td><td>A100 40 GB</td></tr>
+        <tr><td>LoRA 16-bit on 7B</td><td>16 GB</td><td>RTX 4080 / A10</td></tr>
+        <tr><td>Full fine-tune 7B</td><td>80 GB+</td><td>2× A100 80 GB</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>Free GPU tip.</strong> Google Colab free tier provides a T4 GPU (16 GB <span class="kw" tabindex="0">VRAM<span class="tip">Video RAM — the on-chip memory of the GPU. For fine-tuning, this must hold the model weights, optimizer states, gradients, and activations simultaneously. QLoRA dramatically reduces this requirement.</span></span>), sufficient for QLoRA on any 7–13B model. Colab Pro provides A100 access.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(5)">← Previous</button>
+      <span>Page 6 of 9</span>
+      <button onclick="go(7)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 7 — Training & Evaluation -->
+  <div class="pg" id="p7">
+    <div class="page-header">
+      <span>Chapter 6 — Training &amp; Evaluation</span>
+      <span class="page-num">7</span>
+    </div>
+
+    <h2><span class="sec-num">6.</span> Training &amp; Evaluation</h2>
+
+    <p>Once setup is complete, run the training cell. You will see a live log of the <span class="kw" tabindex="0">training loss<span class="tip">A number measuring how wrong the model's predictions are on the training data. It should decrease over time. A final loss of 0.5–1.0 is typical for conversational fine-tuning. Loss of 0 means the model memorized the training data (overfitting).</span></span> — a number that should decrease as training progresses.</p>
+
+    <h3>Reading the training loss</h3>
+
+    <table>
+      <thead><tr><th>Loss range</th><th>Interpretation</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>&gt; 2.0</td><td>Model not learning</td><td>Check dataset format; increase learning rate</td></tr>
+        <tr><td>1.0 – 2.0</td><td>Early learning stage</td><td>Normal for first steps; wait for convergence</td></tr>
+        <tr><td>0.5 – 1.0</td><td>Good learning progress</td><td>Typical healthy final loss for most tasks</td></tr>
+        <tr><td>0.1 – 0.5</td><td>Good — watch validation</td><td>Enable validation set to check for overfitting</td></tr>
+        <tr><td>≈ 0.0</td><td>Overfitting</td><td>Reduce epochs; increase dropout; add more data</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Evaluation approaches</h3>
+
+    <p><strong>Manual evaluation</strong> — chat with the model and judge responses. Simple but effective for conversational tasks. Always start here.</p>
+
+    <p><strong>Held-out validation set</strong> — reserve 20% of your training data before training and evaluate on it during or after training. Configure with <code>evaluation_steps = 100</code> to avoid slowdowns.</p>
+
+    <p><strong>Automated evaluation</strong> — tools like EleutherAI's <span class="kw" tabindex="0">LM Evaluation Harness<span class="tip">An open-source framework for benchmarking LLMs on standardized tasks (e.g., MMLU, HellaSwag, HumanEval). Useful for comparing model versions, but automated benchmarks may not align with your specific task requirements.</span></span> run standardized benchmarks. Use as a supplement to manual evaluation, not a replacement.</p>
+
+    <h3>Common training problems</h3>
+
+    <table>
+      <thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Loss not decreasing</td><td>Learning rate too low, or bad data format</td><td>Raise learning rate; check tokenization</td></tr>
+        <tr><td>Loss spikes / NaN</td><td>Learning rate too high</td><td>Lower learning rate; add warmup steps</td></tr>
+        <tr><td>VRAM OOM error</td><td>Batch size too large</td><td>Reduce batch size; use gradient accumulation</td></tr>
+        <tr><td>Model ignores instructions</td><td>Wrong chat template</td><td>Match template to model (ChatML vs Alpaca)</td></tr>
+        <tr><td>Loss → 0 quickly</td><td>Dataset too small / repeated</td><td>Add data; reduce epochs</td></tr>
+      </tbody>
+    </table>
+
+    <div class="page-nav">
+      <button onclick="go(6)">← Previous</button>
+      <span>Page 7 of 9</span>
+      <button onclick="go(8)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 8 — Running & Deploying -->
+  <div class="pg" id="p8">
+    <div class="page-header">
+      <span>Chapter 7 — Running &amp; Deploying</span>
+      <span class="page-num">8</span>
+    </div>
+
+    <h2><span class="sec-num">7.</span> Running &amp; Deploying the Model</h2>
+
+    <p>After training, always call <code>FastLanguageModel.for_inference(model)</code> before running inference. Unsloth provides 2× faster inference natively — this call activates it.</p>
+
+    <h3>Saving the LoRA adapter</h3>
+
+    <p>The fine-tuned model is saved as a small <span class="kw" tabindex="0">LoRA adapter<span class="tip">A small file (typically 50–200 MB) containing only the trained A and B adapter matrices. It is used on top of the original base model at inference time. Much smaller than saving the full model (which would be 14+ GB for a 7B FP16 model).</span></span> — typically 50–200 MB — rather than the full model weights.</p>
+
+    <pre>
+# Save LoRA adapter locally
+model.save_pretrained("my-lora-adapter")
+tokenizer.save_pretrained("my-lora-adapter")
+
+# Or push to Hugging Face Hub
+model.push_to_hub("your-username/my-model", token="hf_...")
+    </pre>
+
+    <h3>Deployment paths</h3>
+
+    <table>
+      <thead><tr><th>Target environment</th><th>Format</th><th>Tool</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Single device (laptop, Mac)</td>
+          <td><span class="kw" tabindex="0">GGUF<span class="tip">A file format used by llama.cpp and compatible tools (Ollama, LM Studio). Supports multiple quantization levels (Q4_K_M, Q8_0, etc.). Ideal for CPU inference or consumer GPUs without CUDA.</span></span></td>
+          <td>llama.cpp / Ollama / LM Studio</td>
+        </tr>
+        <tr>
+          <td>Enterprise multi-user GPU serving</td>
+          <td>FP8 / AWQ</td>
+          <td><span class="kw" tabindex="0">vLLM<span class="tip">A high-throughput GPU inference server with paged attention and continuous batching. Best for production serving of large models. Supports tensor parallelism across multiple GPUs.</span></span></td>
+        </tr>
+        <tr>
+          <td>Browser / local UI</td>
+          <td>GGUF</td>
+          <td>Open WebUI + Ollama</td>
+        </tr>
+        <tr>
+          <td>Hugging Face ecosystem</td>
+          <td>Safetensors</td>
+          <td>transformers + PEFT</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Converting to GGUF for Ollama</h3>
+
+    <pre>
+# From Unsloth, save directly as GGUF
+model.save_pretrained_gguf(
+    "my-model-gguf",
+    tokenizer,
+    quantization_method = "q4_k_m"  # or q8_0, f16
+)
+
+# Then in Ollama
+# ollama create my-model -f Modelfile
+    </pre>
+
+    <h3>Inference settings</h3>
+
+    <p>Adjust <code>max_new_tokens</code> to control response length. Default is 128 — increase to 256 or 1024 for longer outputs. A higher value will proportionally increase generation time (each additional token requires another full decode step at the <span class="kw" tabindex="0">TBT<span class="tip">Time Between Tokens — the interval between each output token, equal to 1 ÷ TPS. Multiplying by max_new_tokens gives the approximate total generation time.</span></span> rate).</p>
+
+    <div class="page-nav">
+      <button onclick="go(7)">← Previous</button>
+      <span>Page 8 of 9</span>
+      <button onclick="go(9)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 9 — Summary & links -->
+  <div class="pg" id="p9">
+    <div class="page-header">
+      <span>Chapter 8 — Summary &amp; Next Steps</span>
+      <span class="page-num">9</span>
+    </div>
+
+    <h2><span class="sec-num">8.</span> Summary &amp; Next Steps</h2>
+
+    <p>You have covered the complete fine-tuning workflow: understanding what fine-tuning does, choosing a method, preparing a dataset, setting hyperparameters, training, evaluating, and deploying.</p>
+
+    <h3>The fine-tuning checklist</h3>
+
+    <ol>
+      <li>Choose an <span class="kw" tabindex="0">instruct model<span class="tip">A model already instruction-tuned — it understands conversational prompts and chat templates. Easier to fine-tune further than a raw base model because it already knows how to follow instructions.</span></span> appropriate for your task and hardware.</li>
+      <li>Start with <span class="kw" tabindex="0">QLoRA<span class="tip">Quantized LoRA — the recommended starting method. Trains adapters on a 4-bit base model. Requires the least VRAM and is sufficient for most fine-tuning goals.</span></span> before considering LoRA full-precision or FFT.</li>
+      <li>Prepare a clean, well-structured dataset of QA pairs. Quality over quantity.</li>
+      <li>Use default hyperparameters for the first run. Tune only after establishing a baseline.</li>
+      <li>Monitor <span class="kw" tabindex="0">training loss<span class="tip">Should decrease steadily from ~2.0 to 0.5–1.0 over the course of training. A stalled loss means the model is not learning. A loss near 0 means overfitting.</span></span> — it should decrease and stabilize, not reach zero.</li>
+      <li>Evaluate manually first; add a validation set for quantitative measurement.</li>
+      <li>Save as a LoRA adapter and deploy to your target inference engine.</li>
+    </ol>
+
+    <h3>Quick method reference</h3>
+
+    <table>
+      <thead><tr><th>Method</th><th>VRAM</th><th>Quality</th><th>Speed</th></tr></thead>
+      <tbody>
+        <tr><td>QLoRA (INT4 base)</td><td>Lowest</td><td>Good</td><td>Fast</td></tr>
+        <tr><td>LoRA (FP16 base)</td><td>Medium</td><td>Better</td><td>Medium</td></tr>
+        <tr><td>Full fine-tune</td><td>Highest</td><td>Best</td><td>Slow</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Further reading</h3>
+
+    <ul>
+      <li>Unsloth blog — practical tips and benchmarks: <a href="https://unsloth.ai/blog" target="_blank">unsloth.ai/blog</a></li>
+      <li>Community support: <a href="https://discord.gg/unsloth" target="_blank">Discord</a> · <a href="https://reddit.com/r/unsloth" target="_blank">r/unsloth</a></li>
+      <li>Notebook library: <a href="https://docs.unsloth.ai/get-started/unsloth-notebooks" target="_blank">docs.unsloth.ai</a></li>
+    </ul>
+
+    <hr>
+
+    <p style="font-size:0.88rem;color:var(--ink3);">This guide covers the fine-tuning layer. To understand the hardware that runs these models — token throughput calculations, VRAM sizing, power consumption, and GPU selection — refer to the companion volume:</p>
+
+    <a class="book-link" href="llm_tok.qbitkode.com">
+      ← LLM Inference Engineering &nbsp;·&nbsp; Token Throughput, Power &amp; Hardware Selection
+    </a>
+
+    <hr style="margin-top:2em;">
+    <p style="font-size:0.78rem;color:var(--ink3);text-align:center;">Fine-tuning LLMs Guide &nbsp;·&nbsp; Adapted from Unsloth Documentation &nbsp;·&nbsp; llm_tok.qbitkode.com</p>
+
+    <div class="page-nav">
+      <button onclick="go(8)">← Previous</button>
+      <span>Page 9 of 9</span>
+      <button disabled>Next →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function go(n) {
+    document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
+    document.getElementById('p' + n).classList.add('active');
+    document.getElementById('book').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
+</body>
+</html>
