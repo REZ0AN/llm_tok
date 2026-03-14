@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantization-Aware Training (QAT)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a18; --ink2: #3a3a36; --ink3: #6a6a64;
+    --paper: #f7f4ee; --paper2: #ede9e0; --rule: #c8c2b0;
+    --accent: #8b3a2a; --link: #2a5a8b;
+    --nav-bg: #2c2a26; --nav-text: #e8e4d8; --nav-muted: #9a9488;
+    --nav-hover: #3d3a34; --nav-active: #8b3a2a;
+    --font-body: 'Crimson Pro', Georgia, serif;
+    --font-code: 'Source Code Pro', 'Courier New', monospace;
+    --page-w: 680px;
+  }
+
+  html { background: #d0cbbf; font-size: 17px; }
+  body { font-family: var(--font-body); color: var(--ink); line-height: 1.75; background: #d0cbbf; margin: 0; }
+
+  /* ── nav ── */
+  .top-nav { position: sticky; top: 0; z-index: 200; background: var(--nav-bg); display: flex; align-items: stretch; padding: 0 24px; height: 44px; box-shadow: 0 2px 8px rgba(0,0,0,0.28); }
+  .nav-brand { font-family: var(--font-body); font-size: 0.82rem; font-weight: 600; color: var(--nav-text); letter-spacing: 0.04em; display: flex; align-items: center; padding-right: 20px; border-right: 1px solid #3d3a34; white-space: nowrap; text-decoration: none; }
+  .nav-books { display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; flex: 1; }
+  .nav-books::-webkit-scrollbar { display: none; }
+  .nav-book { font-family: var(--font-body); font-size: 0.75rem; color: var(--nav-muted); padding: 0 16px; display: flex; align-items: center; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; white-space: nowrap; letter-spacing: 0.02em; transition: color 0.15s, border-color 0.15s, background 0.15s; text-decoration: none; }
+  .nav-book:hover { color: var(--nav-text); background: var(--nav-hover); }
+  .nav-book.active { color: #e8c4a0; border-bottom-color: var(--nav-active); }
+  .nav-divider { width: 1px; background: #3d3a34; margin: 8px 0; flex-shrink: 0; }
+
+  /* ── page ── */
+  .page { background: var(--paper); width: var(--page-w); margin: 2rem auto; padding: 64px 72px 80px; box-shadow: 3px 3px 18px rgba(0,0,0,0.22), -1px -1px 4px rgba(0,0,0,0.08); position: relative; min-height: 900px; }
+  .page::before { content: ''; position: absolute; top: 0; left: 56px; bottom: 0; width: 1px; background: rgba(180,100,80,0.18); }
+
+  .page-header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--rule); padding-bottom: 8px; margin-bottom: 48px; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); }
+  .page-num { font-size: 0.72rem; color: var(--ink3); }
+
+  h1 { font-size: 2rem; font-weight: 600; line-height: 1.2; margin-bottom: 0.3em; color: var(--ink); }
+  h2 { font-size: 1.35rem; font-weight: 600; margin: 2.4em 0 0.6em; padding-bottom: 4px; border-bottom: 1px solid var(--rule); color: var(--ink); }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 1.8em 0 0.4em; color: var(--ink2); }
+  p { margin-bottom: 0.9em; }
+
+  .subtitle { font-style: italic; color: var(--ink3); font-size: 1.05rem; margin-bottom: 0.2em; }
+  .meta { font-size: 0.8rem; color: var(--ink3); margin-bottom: 2em; padding-bottom: 1.5em; border-bottom: 2px solid var(--rule); }
+
+  .kw { color: var(--accent); font-style: italic; cursor: help; border-bottom: 1px dotted var(--accent); position: relative; display: inline; }
+  .kw .tip { visibility: hidden; opacity: 0; pointer-events: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--ink); color: #f0ece2; font-family: var(--font-body); font-style: normal; font-size: 0.78rem; line-height: 1.55; padding: 9px 12px; border-radius: 3px; width: 260px; z-index: 100; transition: opacity 0.15s, visibility 0.15s; box-shadow: 2px 3px 10px rgba(0,0,0,0.35); white-space: normal; }
+  .kw .tip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: var(--ink); }
+  .kw:hover .tip, .kw:focus .tip { visibility: visible; opacity: 1; }
+
+  pre { background: var(--paper2); border-left: 3px solid var(--rule); padding: 12px 16px; font-family: var(--font-code); font-size: 0.72rem; line-height: 1.6; margin: 1.2em 0 1.4em; overflow-x: auto; color: var(--ink2); }
+  code { font-family: var(--font-code); font-size: 0.82em; background: var(--paper2); padding: 1px 4px; border-radius: 2px; color: var(--ink2); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 1.2em 0 1.6em; }
+  th { text-align: left; font-weight: 600; border-bottom: 2px solid var(--rule); padding: 5px 10px 5px 0; font-size: 0.8rem; letter-spacing: 0.04em; color: var(--ink2); }
+  td { border-bottom: 1px solid var(--paper2); padding: 6px 10px 6px 0; vertical-align: top; color: var(--ink2); }
+  tr:last-child td { border-bottom: none; }
+
+  .callout { border: 1px solid var(--rule); border-left: 3px solid var(--accent); background: var(--paper2); padding: 12px 16px; margin: 1.4em 0; font-size: 0.88rem; color: var(--ink2); line-height: 1.6; }
+  .callout strong { color: var(--accent); }
+  .callout.info { border-left-color: #2a5a8b; }
+  .callout.info strong { color: #2a5a8b; }
+  .callout.success { border-left-color: #2a6b3a; }
+  .callout.success strong { color: #2a6b3a; }
+
+  ol, ul { padding-left: 1.4em; margin-bottom: 0.9em; }
+  li { margin-bottom: 0.4em; font-size: 0.95rem; color: var(--ink2); }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2em 0; }
+
+  .toc { margin: 1.4em 0 0; }
+  .toc-item { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; font-size: 0.92rem; color: var(--ink2); }
+  .toc-item .toc-dots { flex: 1; border-bottom: 1px dotted var(--rule); margin-bottom: 3px; }
+  .toc-item .toc-pg { color: var(--ink3); font-size: 0.82rem; min-width: 20px; text-align: right; }
+  .toc-part { font-size: 0.75rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink3); margin-top: 1em; padding-top: 0.4em; border-top: 1px solid var(--rule); }
+  .sec-num { color: var(--ink3); font-size: 0.85em; margin-right: 0.4em; }
+
+  .stat-row { display: flex; gap: 10px; margin: 1em 0; flex-wrap: wrap; }
+  .stat-card { flex: 1; min-width: 120px; background: var(--paper2); border: 1px solid var(--rule); padding: 10px 14px; border-radius: 2px; border-top: 3px solid var(--accent); }
+  .stat-card .num { font-size: 1.5rem; font-weight: 600; color: var(--accent); line-height: 1.1; }
+  .stat-card .label { font-size: 0.75rem; color: var(--ink3); margin-top: 3px; line-height: 1.4; }
+
+  .step-flow { margin: 1.2em 0 1.6em; }
+  .step { display: flex; gap: 14px; margin-bottom: 0; position: relative; }
+  .step:not(:last-child)::after { content: ''; position: absolute; left: 14px; top: 34px; bottom: -2px; width: 1px; background: var(--rule); }
+  .step-num { width: 30px; height: 30px; min-width: 30px; border-radius: 50%; background: var(--paper2); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; color: var(--ink3); margin-top: 2px; }
+  .step-body { padding-bottom: 18px; }
+  .step-title { font-weight: 600; font-size: 0.95rem; color: var(--ink2); margin-bottom: 2px; }
+  .step-desc { font-size: 0.88rem; color: var(--ink3); line-height: 1.5; }
+
+  .page-nav { display: flex; justify-content: space-between; margin-top: 48px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 0.8rem; color: var(--ink3); align-items: center; }
+  .page-nav button { background: none; border: 1px solid var(--rule); padding: 4px 14px; font-family: var(--font-body); font-size: 0.82rem; cursor: pointer; color: var(--ink2); border-radius: 2px; }
+  .page-nav button:hover { background: var(--paper2); }
+  .page-nav button:disabled { opacity: 0.3; cursor: default; }
+
+  .pg { display: none; }
+  .pg.active { display: block; }
+  a { color: var(--link); }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <span class="nav-brand">LLM Engineering Library</span>
+  <div class="nav-books">
+    <a class="nav-book" href="index.html">LLM Inference Engineering</a>
+    <div class="nav-divider"></div>
+    <a class="nav-book" href="fine-tuning-llms-guide.html">Fine-tuning Guide</a>
+    <div class="nav-divider"></div>
+    <a class="nav-book" href="unsloth-kernels-packing.html">Kernels &amp; Packing</a>
+    <div class="nav-divider"></div>
+    <span class="nav-book active">QAT</span>
+  </div>
+</nav>
+
+<div class="page" id="book">
+
+  <!-- PAGE 1 — Title & TOC -->
+  <div class="pg active" id="p1">
+    <div class="page-header">
+      <span>Quantization-Aware Training</span>
+      <span class="page-num">i</span>
+    </div>
+
+    <h1>Quantization-Aware<br>Training</h1>
+    <p class="subtitle">Trainable quantization that recovers accuracy lost to standard 4-bit quantization</p>
+    <p class="meta">Unsloth × TorchAO Documentation &nbsp;·&nbsp; LLM Engineering Library</p>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="num">70%</div><div class="label">Max accuracy recovered vs. standard 4-bit naive quantization</div></div>
+      <div class="stat-card"><div class="num">+2.1%</div><div class="label">Raw accuracy gain on Gemma3-12B BBH benchmark</div></div>
+      <div class="stat-card"><div class="num">0</div><div class="label">Extra overhead at inference time vs. standard INT4</div></div>
+      <div class="stat-card"><div class="num">4</div><div class="label">QAT schemes supported: fp8-int4, fp8-fp8, int8-int4, int4</div></div>
+    </div>
+
+    <h2>Table of Contents</h2>
+    <div class="toc">
+      <div class="toc-part">Concepts</div>
+      <div class="toc-item"><span>1. What is Quantization (PTQ)</span><span class="toc-dots"></span><span class="toc-pg">2</span></div>
+      <div class="toc-item"><span>2. What is QAT &amp; How It Works</span><span class="toc-dots"></span><span class="toc-pg">3</span></div>
+      <div class="toc-part">Implementation</div>
+      <div class="toc-item"><span>3. QAT + LoRA Fine-tuning</span><span class="toc-dots"></span><span class="toc-pg">4</span></div>
+      <div class="toc-item"><span>4. Exporting QAT Models</span><span class="toc-dots"></span><span class="toc-pg">5</span></div>
+      <div class="toc-item"><span>5. PTQ without Training &amp; Mobile</span><span class="toc-dots"></span><span class="toc-pg">6</span></div>
+      <div class="toc-item"><span>6. Setup, Benchmarks &amp; Summary</span><span class="toc-dots"></span><span class="toc-pg">7</span></div>
+    </div>
+
+    <div class="callout" style="margin-top:2em;">
+      <strong>What this document covers.</strong> Standard <span class="kw" tabindex="0">quantization<span class="tip">The process of reducing a model's weight precision from 32-bit or 16-bit floating point to a lower-bit integer format (INT8, INT4). Reduces model size and speeds up inference, but introduces rounding errors that degrade accuracy — especially at 4-bit.</span></span> (PTQ) reduces model size but loses accuracy. QAT fixes this by making quantization a trainable operation — the model learns to be robust to quantization during fine-tuning, recovering up to 70% of the accuracy loss at no extra inference cost.
+    </div>
+
+    <div class="page-nav">
+      <button disabled>← Previous</button>
+      <span>Page 1 of 7</span>
+      <button onclick="go(2)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2 — PTQ -->
+  <div class="pg" id="p2">
+    <div class="page-header">
+      <span>Chapter 1 — Post-Training Quantization</span>
+      <span class="page-num">2</span>
+    </div>
+
+    <h2><span class="sec-num">1.</span> What is Quantization (PTQ)?</h2>
+
+    <p>Naively quantizing a trained model — without any additional training — is called <span class="kw" tabindex="0">Post-Training Quantization<span class="tip">PTQ — applying quantization after training is already complete. Fast and simple, but introduces rounding errors because the model's weights were never optimized to work well at the lower precision. The larger the model, the better PTQ tends to work; small models at 4-bit suffer more.</span></span> (PTQ). The process for INT8 quantization, step by step:</p>
+
+    <div class="step-flow">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Find the weight range</div>
+          <div class="step-desc">Compute <code>max(abs(W))</code> — the largest absolute value in the weight matrix.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Compute the scale factor</div>
+          <div class="step-desc">Compute <code>a = 127 / max(abs(W))</code>. The value 127 is INT8's maximum range.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Quantize</div>
+          <div class="step-desc">Apply <code>qW = int8(round(W × a))</code>. Each weight is rounded to the nearest integer in [−127, 127].</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Dequantize for inference</div>
+          <div class="step-desc">Reverse with <code>float16(qW) / a</code>. The rounding in step 3 introduces an error that cannot be recovered.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Why PTQ degrades accuracy</h3>
+
+    <p>The rounding in step 3 is irreversible. At <span class="kw" tabindex="0">INT4<span class="tip">4-bit integer quantization — only 16 distinct values can represent a weight (-8 to 7). At this extreme compression, important fine-grained weight differences collapse to the same quantized value, causing the model to behave differently than the full-precision version.</span></span> precision, weights can only take 16 distinct values. Important weight distinctions that the model learned during training are collapsed, and the model's behavior changes — sometimes significantly. This is the quantization gap that QAT is designed to close.</p>
+
+    <h3>Workarounds short of QAT</h3>
+
+    <table>
+      <thead><tr><th>Method</th><th>How it helps</th><th>Limitation</th></tr></thead>
+      <tbody>
+        <tr><td>Standard PTQ</td><td>Fast, no extra data needed</td><td>Largest accuracy loss, especially at 4-bit</td></tr>
+        <tr><td><span class="kw" tabindex="0">GPTQ<span class="tip">Generative Pre-trained Transformer Quantization — a calibration-based PTQ method that uses a small dataset to minimize quantization error layer by layer. Better than naive PTQ but still a one-shot post-training fix.</span></span> / AWQ</td><td>Calibration dataset minimizes rounding error</td><td>Still post-hoc; model not trained to be quantization-robust</td></tr>
+        <tr><td>Dynamic GGUF quants</td><td>Allocates more bits to important weights</td><td>Heuristic-based; no gradient signal</td></tr>
+        <tr><td><strong>QAT</strong></td><td>Model learns quantization during training</td><td>Requires a training run (but often just fine-tuning)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="page-nav">
+      <button onclick="go(1)">← Previous</button>
+      <span>Page 2 of 7</span>
+      <button onclick="go(3)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 3 — QAT -->
+  <div class="pg" id="p3">
+    <div class="page-header">
+      <span>Chapter 2 — What is QAT &amp; How It Works</span>
+      <span class="page-num">3</span>
+    </div>
+
+    <h2><span class="sec-num">2.</span> What is QAT &amp; How It Works</h2>
+
+    <p><span class="kw" tabindex="0">Quantization-Aware Training<span class="tip">QAT — a training technique where the quantization operation is simulated during the forward pass, making the model aware of and robust to the precision loss it will experience at inference. The model adjusts its weights during training to minimize the impact of quantization.</span></span> (QAT) simulates the quantization procedure during training itself, rather than applying it after. The key idea is "fake quantization" — weights are rounded to the quantized representation and back during each forward pass, exposing the model to quantization error during gradient descent so it can learn to compensate.</p>
+
+    <h3>Fake quantization explained</h3>
+
+    <p>During each training step, the <span class="kw" tabindex="0">fake quantize<span class="tip">A differentiable approximation to quantization used during training. The weight is rounded to its quantized value and immediately dequantized back to float — so the computation stays in high precision (bfloat16), but the model "sees" the quantized version of its weights and learns to tolerate it.</span></span> operation:</p>
+
+    <ol>
+      <li>Takes the full-precision weight W (in bfloat16)</li>
+      <li>Rounds it to its quantized representation (e.g., the nearest INT4 value)</li>
+      <li>Immediately dequantizes back to bfloat16</li>
+      <li>Uses this "damaged" weight for the forward pass</li>
+    </ol>
+
+    <p>The model receives gradients that account for the rounding damage and adjusts its weights to be more robust to it over thousands of training steps. At the end, the weights are converted to the actual quantized format for deployment.</p>
+
+    <h3>The two-phase TorchAO pipeline</h3>
+
+    <div class="step-flow">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Insert fake quantize operations</div>
+          <div class="step-desc"><span class="kw" tabindex="0">TorchAO<span class="tip">PyTorch Architecture Optimization — a PyTorch library for quantization and other model optimization techniques. Developed by Meta/PyTorch. Unsloth integrates TorchAO to provide QAT support, leveraging its fake quantize infrastructure and final conversion utilities.</span></span> wraps each linear layer with fake quantize ops before training begins. The model trains normally, but every weight access goes through the fake quantize round-trip.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Convert to real quantized format</div>
+          <div class="step-desc">After training, TorchAO replaces the fake quantize ops with actual quantize/dequantize operations, producing a real INT4 or INT8 model ready for inference.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Benchmark results</h3>
+
+    <table>
+      <thead><tr><th>Model</th><th>Benchmark</th><th>Accuracy recovered</th><th>Raw accuracy gain</th></tr></thead>
+      <tbody>
+        <tr><td>Gemma3-4B</td><td>GPQA</td><td>66.9%</td><td>+1.0%</td></tr>
+        <tr><td>Gemma3-12B</td><td>BBH</td><td>45.5%</td><td>+2.1%</td></tr>
+        <tr><td>General</td><td>GPQA, MMLU Pro</td><td>Up to 70%</td><td>+1 – 3%</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout success">
+      <strong>Zero inference overhead.</strong> QAT produces a model in the same INT4 or INT8 format as standard PTQ. It uses identical disk space, VRAM, and inference speed. The only difference is accuracy — which is meaningfully better.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(2)">← Previous</button>
+      <span>Page 3 of 7</span>
+      <button onclick="go(4)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 4 — QAT + LoRA -->
+  <div class="pg" id="p4">
+    <div class="page-header">
+      <span>Chapter 3 — QAT + LoRA Fine-tuning</span>
+      <span class="page-num">4</span>
+    </div>
+
+    <h2><span class="sec-num">3.</span> QAT + LoRA Fine-tuning</h2>
+
+    <p>QAT in Unsloth combines with <span class="kw" tabindex="0">LoRA<span class="tip">Low-Rank Adaptation — adds small trainable adapter matrices to each weight layer. Only the adapter matrices are updated during training, keeping the base model weights frozen. Combined with QAT, the base model is fake-quantized while LoRA adapters train on top, giving both quantization robustness and task-specific adaptation.</span></span> fine-tuning simultaneously. This means you get:</p>
+
+    <ul>
+      <li><strong>Quantization robustness</strong> from QAT — the model learns to tolerate its future INT4 form</li>
+      <li><strong>Task-specific adaptation</strong> from LoRA — the model is simultaneously fine-tuned on your dataset</li>
+      <li><strong>Memory efficiency</strong> from LoRA — only 1% of weights are trainable adapter parameters</li>
+    </ul>
+
+    <h3>Supported QAT schemes</h3>
+
+    <table>
+      <thead><tr><th>Scheme</th><th>Weights</th><th>Activations</th><th>Use case</th></tr></thead>
+      <tbody>
+        <tr><td><code>int4</code></td><td>INT4</td><td>FP16/BF16</td><td>Maximum compression, standard inference</td></tr>
+        <tr><td><code>int8-int4</code></td><td>INT4</td><td>INT8</td><td>Better accuracy, compatible with INT8 accelerators</td></tr>
+        <tr><td><code>fp8-int4</code></td><td>INT4</td><td>FP8</td><td>H100/B200 inference with FP8 tensor cores</td></tr>
+        <tr><td><code>fp8-fp8</code></td><td>FP8</td><td>FP8</td><td>Highest throughput on FP8-capable hardware</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Code — QAT + LoRA setup</h3>
+
+    <pre>
+from unsloth import FastLanguageModel
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name = "unsloth/Qwen3-4B-Instruct-2507",
+    max_seq_length = 2048,
+    load_in_16bit = True,  # load full precision — QAT handles quantization
+)
+
+model = FastLanguageModel.get_peft_model(
+    model,
+    r = 16,
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
+                      "gate_proj", "up_proj", "down_proj"],
+    lora_alpha = 32,
+
+    # Choose QAT scheme: "int4", "int8-int4", "fp8-int4", "fp8-fp8"
+    qat_scheme = "int4",
+)
+
+# Train as normal with SFTTrainer — QAT operates transparently
+    </pre>
+
+    <div class="callout info">
+      <strong>Note on load_in_16bit.</strong> When using QAT, load the base model in 16-bit (<code>load_in_16bit=True</code>), not 4-bit. QAT needs the full-precision weights to fake-quantize during training. Using <code>load_in_4bit</code> with QAT would quantize before QAT can simulate it, defeating the purpose.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(3)">← Previous</button>
+      <span>Page 4 of 7</span>
+      <button onclick="go(5)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 5 — Exporting -->
+  <div class="pg" id="p5">
+    <div class="page-header">
+      <span>Chapter 4 — Exporting QAT Models</span>
+      <span class="page-num">5</span>
+    </div>
+
+    <h2><span class="sec-num">4.</span> Exporting QAT Models</h2>
+
+    <p>After fine-tuning, the model still contains fake quantize operations — they must be converted to real quantized format before inference. Unsloth provides <code>model.save_pretrained_torchao</code> for this. There are two steps.</p>
+
+    <h3>Step 1 — Convert fake → real quantization</h3>
+
+    <pre>
+from torchao.quantization import quantize_
+from torchao.quantization.qat import QATConfig
+
+# This replaces fake quantize ops with real quantize/dequantize ops
+quantize_(model, QATConfig(step = "convert"))
+    </pre>
+
+    <h3>Step 2 — Save in your chosen format</h3>
+
+    <p>Three options are shown below. The first is the most convenient — it reuses whatever <span class="kw" tabindex="0">QAT scheme<span class="tip">The quantization scheme used during training (e.g., int4, fp8-int4). Saved in model._torchao_config. Using base_config reuses exactly the same format that was trained — ensures consistency between training precision and inference precision.</span></span> was used during training. The other two let you override the output format.</p>
+
+    <pre>
+# Option A — match training scheme (recommended)
+model.save_pretrained_torchao(
+    model, "tokenizer",
+    torchao_config = model._torchao_config.base_config,
+)
+
+# Option B — explicit INT4 output
+from torchao.quantization import Int4WeightOnlyConfig
+model.save_pretrained_torchao(
+    model, "tokenizer",
+    torchao_config = Int4WeightOnlyConfig(),
+)
+
+# Option C — explicit INT8 output
+from torchao.quantization import Int8DynamicActivationInt8WeightConfig
+model.save_pretrained_torchao(
+    model, "tokenizer",
+    torchao_config = Int8DynamicActivationInt8WeightConfig(),
+)
+    </pre>
+
+    <h3>After saving</h3>
+
+    <p>The saved model is a standard <span class="kw" tabindex="0">TorchAO<span class="tip">PyTorch Architecture Optimization format — the output format produced by save_pretrained_torchao. Compatible with vLLM, Unsloth inference, and other PyTorch-based inference engines. Can also be uploaded to the Hugging Face Hub.</span></span> quantized model. It can be:</p>
+
+    <ul>
+      <li>Served via <strong>vLLM</strong> for multi-user production inference</li>
+      <li>Loaded back in Unsloth for further fine-tuning or inference</li>
+      <li>Uploaded to the <strong>Hugging Face Hub</strong> with <code>push_to_hub</code></li>
+      <li>Exported to <strong>ExecuTorch</strong> for mobile deployment (see page 6)</li>
+    </ul>
+
+    <div class="callout">
+      <strong>Uploading to Hugging Face.</strong> Remember to generate a Hugging Face token at <a href="https://huggingface.co/settings/tokens" target="_blank">huggingface.co/settings/tokens</a> and add it to your environment before calling <code>push_to_hub</code>.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(4)">← Previous</button>
+      <span>Page 5 of 7</span>
+      <button onclick="go(6)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 6 — PTQ without training + Mobile -->
+  <div class="pg" id="p6">
+    <div class="page-header">
+      <span>Chapter 5 — PTQ without Training &amp; Mobile</span>
+      <span class="page-num">6</span>
+    </div>
+
+    <h2><span class="sec-num">5.</span> PTQ without Training &amp; Mobile Deployment</h2>
+
+    <h3>Using save_pretrained_torchao for PTQ</h3>
+
+    <p>You can call <code>model.save_pretrained_torchao</code> on any model without running QAT training — this performs standard <span class="kw" tabindex="0">PTQ<span class="tip">Post-Training Quantization — applying quantization after training without any QAT-aware fine-tuning. Faster than QAT but lower accuracy, especially at 4-bit. Useful when you want to convert an existing model to a TorchAO-compatible format without additional training.</span></span> and saves the result in TorchAO format. Useful for converting existing models to FP8 or other formats for deployment on specialized hardware.</p>
+
+    <pre>
+# Convert any loaded model to dynamic Float8 (no training required)
+from torchao.quantization import PerRow
+from torchao.quantization import Float8DynamicActivationFloat8WeightConfig
+
+torchao_config = Float8DynamicActivationFloat8WeightConfig(
+    granularity = PerRow()
+)
+model.save_pretrained_torchao(torchao_config = torchao_config)
+    </pre>
+
+    <h3>FP8 for H100 / B200 inference</h3>
+
+    <p><span class="kw" tabindex="0">FP8<span class="tip">8-bit floating point — a newer number format supported natively by H100 and B200 Tensor Cores. Unlike INT8, FP8 retains a floating-point exponent, making it better suited for activations that vary widely in magnitude. FP8 inference on H100 can be significantly faster than FP16 with minimal accuracy loss.</span></span> is a floating-point format supported natively on H100 and B200 GPUs. Unlike INT formats, FP8 retains an exponent, making it more accurate for activations. FP8 × FP8 matrix multiplications can be significantly faster than FP16 on compatible hardware.</p>
+
+    <table>
+      <thead><tr><th>Format</th><th>Hardware</th><th>Speed vs FP16</th><th>Accuracy</th></tr></thead>
+      <tbody>
+        <tr><td>FP16 (baseline)</td><td>All GPUs</td><td>1×</td><td>Baseline</td></tr>
+        <tr><td>INT8</td><td>All GPUs</td><td>1.5 – 2×</td><td>Minor loss</td></tr>
+        <tr><td>INT4</td><td>All GPUs</td><td>2 – 3×</td><td>Moderate loss (recoverable with QAT)</td></tr>
+        <tr><td>FP8</td><td>H100, B200</td><td>1.5 – 2×</td><td>Near-lossless</td></tr>
+      </tbody>
+    </table>
+
+    <h3>ExecuTorch — mobile deployment</h3>
+
+    <p><span class="kw" tabindex="0">ExecuTorch<span class="tip">PyTorch's framework for on-device inference — running LLMs directly on mobile phones, tablets, and edge devices without a server. Uses highly optimized kernels for ARM CPUs and mobile GPUs. Requires INT4 or INT8 quantization to fit models in the limited memory of mobile hardware.</span></span> is PyTorch's solution for running LLMs on mobile devices (iOS, Android). QAT-trained models from Unsloth can be exported directly to ExecuTorch format, enabling on-device inference with the accuracy benefits of QAT.</p>
+
+    <p>A reference deployment is available at <a href="https://huggingface.co/metascroy/Qwen3-4B-int8-int4-unsloth" target="_blank">huggingface.co/metascroy/Qwen3-4B-int8-int4-unsloth</a> — a Qwen3-4B model quantized via Unsloth QAT and ready for ExecuTorch deployment on mobile.</p>
+
+    <div class="callout info">
+      <strong>Announcement coming soon.</strong> Full mobile deployment workflows with ExecuTorch are under active development. The reference model above demonstrates the end-to-end pipeline already works.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(5)">← Previous</button>
+      <span>Page 6 of 7</span>
+      <button onclick="go(7)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 7 — Setup & Summary -->
+  <div class="pg" id="p7">
+    <div class="page-header">
+      <span>Chapter 6 — Setup, Benchmarks &amp; Summary</span>
+      <span class="page-num">7</span>
+    </div>
+
+    <h2><span class="sec-num">6.</span> Setup, Benchmarks &amp; Summary</h2>
+
+    <h3>Installation</h3>
+
+    <pre>
+pip install --upgrade --no-cache-dir --force-reinstall unsloth unsloth_zoo
+pip install torchao==0.14.0 fbgemm-gpu-genai==1.3.0
+    </pre>
+
+    <p>Then try QAT with the free Colab notebook: <a href="https://colab.research.google.com/github/unslothai/notebooks/blob/main/nb/Qwen3_(4B)_Instruct-QAT.ipynb" target="_blank">Qwen3 (4B) QAT notebook</a></p>
+
+    <h3>QAT vs PTQ — decision guide</h3>
+
+    <table>
+      <thead><tr><th>Situation</th><th>Recommendation</th></tr></thead>
+      <tbody>
+        <tr><td>Need 4-bit model, accuracy is critical</td><td>Use QAT (<code>qat_scheme="int4"</code>)</td></tr>
+        <tr><td>Need 4-bit model, speed is priority</td><td>Standard PTQ (GPTQ/AWQ) — faster to produce</td></tr>
+        <tr><td>Deploying on H100/B200</td><td>QAT with <code>fp8-fp8</code> or <code>fp8-int4</code></td></tr>
+        <tr><td>Deploying on mobile (ExecuTorch)</td><td>QAT with <code>int8-int4</code>, export to ExecuTorch</td></tr>
+        <tr><td>Already have a trained model, just want to compress</td><td><code>save_pretrained_torchao</code> PTQ (no training needed)</td></tr>
+        <tr><td>Fine-tuning AND quantizing simultaneously</td><td>QAT + LoRA (<code>get_peft_model</code> with <code>qat_scheme</code>)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The QAT workflow at a glance</h3>
+
+    <div class="step-flow">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body"><div class="step-title">Load model in 16-bit</div><div class="step-desc"><code>load_in_16bit=True</code> — QAT needs full-precision weights.</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body"><div class="step-title">Apply LoRA with QAT scheme</div><div class="step-desc"><code>get_peft_model(..., qat_scheme="int4")</code></div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body"><div class="step-title">Train normally</div><div class="step-desc">Run SFTTrainer as usual — fake quantize ops are transparent.</div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body"><div class="step-title">Convert fake → real</div><div class="step-desc"><code>quantize_(model, QATConfig(step="convert"))</code></div></div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body"><div class="step-title">Save and deploy</div><div class="step-desc"><code>save_pretrained_torchao</code> → vLLM, Unsloth, HF Hub, or ExecuTorch.</div></div>
+      </div>
+    </div>
+
+    <hr>
+    <p style="font-size:0.82rem;color:var(--ink3);">QAT was developed in collaboration with the PyTorch and TorchAO team. Thanks to Andrew Or, Jerry Zhang, Supriya Rao, Scott Roy, Mergen Nachin, and the ExecuTorch team.</p>
+
+    <div style="display:flex;gap:10px;margin-top:1.4em;flex-wrap:wrap;">
+      <a href="unsloth-kernels-packing.html" style="display:inline-block;padding:8px 18px;border:1px solid var(--rule);background:var(--paper2);font-family:var(--font-body);font-size:0.85rem;color:var(--ink2);text-decoration:none;border-radius:2px;border-left:3px solid var(--accent);">← Kernels &amp; Packing</a>
+      <a href="fine-tuning-llms-guide.html" style="display:inline-block;padding:8px 18px;border:1px solid var(--rule);background:var(--paper2);font-family:var(--font-body);font-size:0.85rem;color:var(--ink2);text-decoration:none;border-radius:2px;border-left:3px solid var(--accent);">← Fine-tuning Guide</a>
+      <a href="index.html" style="display:inline-block;padding:8px 18px;border:1px solid var(--rule);background:var(--paper2);font-family:var(--font-body);font-size:0.85rem;color:var(--ink2);text-decoration:none;border-radius:2px;border-left:3px solid #2a5a8b;">← LLM Inference Engineering</a>
+    </div>
+
+    <hr style="margin-top:2em;">
+    <p style="font-size:0.78rem;color:var(--ink3);text-align:center;">Quantization-Aware Training &nbsp;·&nbsp; Unsloth × TorchAO &nbsp;·&nbsp; llm_tok.qbitkode.com</p>
+
+    <div class="page-nav">
+      <button onclick="go(6)">← Previous</button>
+      <span>Page 7 of 7</span>
+      <button disabled>Next →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function go(n) {
+    document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
+    document.getElementById('p' + n).classList.add('active');
+    document.getElementById('book').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
+</body>
+</html>
