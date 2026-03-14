@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unsloth — 3× Faster LLM Training</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a18;
+    --ink2: #3a3a36;
+    --ink3: #6a6a64;
+    --paper: #f7f4ee;
+    --paper2: #ede9e0;
+    --rule: #c8c2b0;
+    --accent: #8b3a2a;
+    --link: #2a5a8b;
+    --nav-bg: #2c2a26;
+    --nav-text: #e8e4d8;
+    --nav-muted: #9a9488;
+    --nav-hover: #3d3a34;
+    --nav-active: #8b3a2a;
+    --font-body: 'Crimson Pro', Georgia, serif;
+    --font-code: 'Source Code Pro', 'Courier New', monospace;
+    --page-w: 680px;
+  }
+
+  html { background: #d0cbbf; font-size: 17px; }
+  body { font-family: var(--font-body); color: var(--ink); line-height: 1.75; background: #d0cbbf; margin: 0; }
+
+  /* ── top nav ── */
+  .top-nav {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    background: var(--nav-bg);
+    display: flex;
+    align-items: stretch;
+    padding: 0 24px;
+    height: 44px;
+    gap: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.28);
+  }
+
+  .nav-brand {
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--nav-text);
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    padding-right: 20px;
+    border-right: 1px solid #3d3a34;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .nav-books {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex: 1;
+  }
+  .nav-books::-webkit-scrollbar { display: none; }
+
+  .nav-book {
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    color: var(--nav-muted);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    text-decoration: none;
+  }
+
+  .nav-book:hover { color: var(--nav-text); background: var(--nav-hover); }
+  .nav-book.active { color: #e8c4a0; border-bottom-color: var(--nav-active); }
+
+  .nav-divider {
+    width: 1px;
+    background: #3d3a34;
+    margin: 8px 0;
+    flex-shrink: 0;
+  }
+
+  /* ── page shell ── */
+  .page {
+    background: var(--paper);
+    width: var(--page-w);
+    margin: 2rem auto;
+    padding: 64px 72px 80px;
+    box-shadow: 3px 3px 18px rgba(0,0,0,0.22), -1px -1px 4px rgba(0,0,0,0.08);
+    position: relative;
+    min-height: 900px;
+  }
+
+  .page::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 56px; bottom: 0;
+    width: 1px;
+    background: rgba(180,100,80,0.18);
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 8px;
+    margin-bottom: 48px;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  .page-num { font-size: 0.72rem; color: var(--ink3); }
+
+  h1 { font-size: 2rem; font-weight: 600; line-height: 1.2; margin-bottom: 0.3em; color: var(--ink); }
+  h2 { font-size: 1.35rem; font-weight: 600; margin: 2.4em 0 0.6em; padding-bottom: 4px; border-bottom: 1px solid var(--rule); color: var(--ink); }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 1.8em 0 0.4em; color: var(--ink2); }
+  p { margin-bottom: 0.9em; }
+
+  .subtitle { font-style: italic; color: var(--ink3); font-size: 1.05rem; margin-bottom: 0.2em; }
+  .meta { font-size: 0.8rem; color: var(--ink3); margin-bottom: 2em; padding-bottom: 1.5em; border-bottom: 2px solid var(--rule); }
+
+  .kw {
+    color: var(--accent); font-style: italic; cursor: help;
+    border-bottom: 1px dotted var(--accent);
+    position: relative; display: inline;
+  }
+  .kw .tip {
+    visibility: hidden; opacity: 0; pointer-events: none;
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink); color: #f0ece2;
+    font-family: var(--font-body); font-style: normal;
+    font-size: 0.78rem; line-height: 1.55;
+    padding: 9px 12px; border-radius: 3px; width: 260px;
+    z-index: 100; transition: opacity 0.15s, visibility 0.15s;
+    box-shadow: 2px 3px 10px rgba(0,0,0,0.35); white-space: normal;
+  }
+  .kw .tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--ink);
+  }
+  .kw:hover .tip, .kw:focus .tip { visibility: visible; opacity: 1; }
+
+  pre {
+    background: var(--paper2); border-left: 3px solid var(--rule);
+    padding: 12px 16px; font-family: var(--font-code);
+    font-size: 0.72rem; line-height: 1.6;
+    margin: 1.2em 0 1.4em; overflow-x: auto; color: var(--ink2);
+  }
+
+  code {
+    font-family: var(--font-code); font-size: 0.82em;
+    background: var(--paper2); padding: 1px 4px;
+    border-radius: 2px; color: var(--ink2);
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 1.2em 0 1.6em; }
+  th { text-align: left; font-weight: 600; border-bottom: 2px solid var(--rule); padding: 5px 10px 5px 0; font-size: 0.8rem; letter-spacing: 0.04em; color: var(--ink2); }
+  td { border-bottom: 1px solid var(--paper2); padding: 6px 10px 6px 0; vertical-align: top; color: var(--ink2); }
+  tr:last-child td { border-bottom: none; }
+
+  .callout {
+    border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    background: var(--paper2); padding: 12px 16px;
+    margin: 1.4em 0; font-size: 0.88rem; color: var(--ink2); line-height: 1.6;
+  }
+  .callout strong { color: var(--accent); }
+  .callout.info { border-left-color: #2a5a8b; }
+  .callout.info strong { color: #2a5a8b; }
+  .callout.success { border-left-color: #2a6b3a; }
+  .callout.success strong { color: #2a6b3a; }
+
+  ol, ul { padding-left: 1.4em; margin-bottom: 0.9em; }
+  li { margin-bottom: 0.4em; font-size: 0.95rem; color: var(--ink2); }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 2em 0; }
+
+  .toc { margin: 1.4em 0 0; }
+  .toc-item { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; font-size: 0.92rem; color: var(--ink2); }
+  .toc-item .toc-dots { flex: 1; border-bottom: 1px dotted var(--rule); margin-bottom: 3px; }
+  .toc-item .toc-pg { color: var(--ink3); font-size: 0.82rem; min-width: 20px; text-align: right; }
+  .toc-part { font-size: 0.75rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink3); margin-top: 1em; padding-top: 0.4em; border-top: 1px solid var(--rule); }
+
+  .sec-num { color: var(--ink3); font-size: 0.85em; margin-right: 0.4em; }
+
+  .formula-block {
+    display: block;
+    background: var(--paper2);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule);
+    padding: 12px 16px;
+    margin: 1em 0;
+    font-family: var(--font-code);
+    font-size: 0.78rem;
+    color: var(--ink2);
+    line-height: 1.9;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-family: var(--font-body);
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: var(--paper2);
+    border: 1px solid var(--rule);
+    color: var(--ink3);
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+  .badge.fast { background: #edf5e8; border-color: #9ac47a; color: #2a6b3a; }
+  .badge.mem { background: #e8f0f8; border-color: #7aaac4; color: #1d4a7a; }
+
+  .page-nav {
+    display: flex; justify-content: space-between;
+    margin-top: 48px; padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8rem; color: var(--ink3); align-items: center;
+  }
+  .page-nav button {
+    background: none; border: 1px solid var(--rule);
+    padding: 4px 14px; font-family: var(--font-body);
+    font-size: 0.82rem; cursor: pointer;
+    color: var(--ink2); border-radius: 2px;
+  }
+  .page-nav button:hover { background: var(--paper2); }
+  .page-nav button:disabled { opacity: 0.3; cursor: default; }
+
+  .pg { display: none; }
+  .pg.active { display: block; }
+
+  a { color: var(--link); }
+  a:hover { text-decoration: underline; }
+
+  .stat-row { display: flex; gap: 10px; margin: 1em 0; flex-wrap: wrap; }
+  .stat-card {
+    flex: 1; min-width: 120px;
+    background: var(--paper2);
+    border: 1px solid var(--rule);
+    padding: 10px 14px;
+    border-radius: 2px;
+    border-top: 3px solid var(--accent);
+  }
+  .stat-card .num { font-size: 1.5rem; font-weight: 600; color: var(--accent); line-height: 1.1; }
+  .stat-card .label { font-size: 0.75rem; color: var(--ink3); margin-top: 3px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER NAV ── -->
+<nav class="top-nav">
+  <span class="nav-brand">LLM Engineering Library</span>
+  <div class="nav-books">
+    <a class="nav-book" href="index.html">LLM Inference Engineering</a>
+    <div class="nav-divider"></div>
+    <a class="nav-book" href="fine-tuning-llms-guide.html">Fine-tuning Guide</a>
+    <div class="nav-divider"></div>
+    <span class="nav-book active">Kernels &amp; Packing</span>
+    <div class="nav-divider"></div>
+    <a class="nav-book" href="qat-guide.html">QAT</a>
+  </div>
+</nav>
+
+<!-- ── BOOK ── -->
+<div class="page" id="book">
+
+  <!-- PAGE 1 — Title & TOC -->
+  <div class="pg active" id="p1">
+    <div class="page-header">
+      <span>Unsloth — Kernels &amp; Packing</span>
+      <span class="page-num">i</span>
+    </div>
+
+    <h1>3× Faster LLM Training</h1>
+    <p class="subtitle">Unsloth Custom Kernels, RoPE Fusion &amp; Uncontaminated Packing</p>
+    <p class="meta">Unsloth Documentation &nbsp;·&nbsp; Companion to Fine-tuning LLMs Guide</p>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="num">5×</div><div class="label">Max training speedup with packing on short-sequence datasets</div></div>
+      <div class="stat-card"><div class="num">90%</div><div class="label">Max VRAM reduction reported with new kernels + packing</div></div>
+      <div class="stat-card"><div class="num">2.3×</div><div class="label">RoPE kernel speedup on long-context training</div></div>
+      <div class="stat-card"><div class="num">0%</div><div class="label">Accuracy change — loss curves match exactly</div></div>
+    </div>
+
+    <h2>Table of Contents</h2>
+    <div class="toc">
+      <div class="toc-part">Kernels</div>
+      <div class="toc-item"><span>1. Fused QK RoPE Triton Kernel</span><span class="toc-dots"></span><span class="toc-pg">2</span></div>
+      <div class="toc-item"><span>2. Int64 Indexing for Long Context</span><span class="toc-dots"></span><span class="toc-pg">3</span></div>
+      <div class="toc-part">Packing</div>
+      <div class="toc-item"><span>3. Why Padding is Wasteful (Math)</span><span class="toc-dots"></span><span class="toc-pg">4</span></div>
+      <div class="toc-item"><span>4. Padding-Free by Default</span><span class="toc-dots"></span><span class="toc-pg">5</span></div>
+      <div class="toc-item"><span>5. Uncontaminated Packing</span><span class="toc-dots"></span><span class="toc-pg">6</span></div>
+      <div class="toc-part">Results</div>
+      <div class="toc-item"><span>6. Benchmarks &amp; Analysis</span><span class="toc-dots"></span><span class="toc-pg">7</span></div>
+      <div class="toc-item"><span>7. How to Enable Packing</span><span class="toc-dots"></span><span class="toc-pg">8</span></div>
+    </div>
+
+    <div class="callout" style="margin-top:2em;">
+      <strong>What this document covers.</strong> Unsloth v2025 introduces custom <span class="kw" tabindex="0">Triton kernels<span class="tip">Triton is a GPU programming language (by OpenAI) that allows writing custom CUDA-like kernels in Python. Unsloth uses Triton to write hand-optimized kernels for RoPE, SwiGLU, and GeGLU — the operations that make up most of transformer training compute.</span></span> for RoPE and MLP layers, and smart padding-free packing that is enabled by default. The result is 1.7–5× faster training with 30–90% less VRAM and zero change in model quality.
+    </div>
+
+    <div class="page-nav">
+      <button disabled>← Previous</button>
+      <span>Page 1 of 8</span>
+      <button onclick="go(2)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 2 — RoPE Kernel -->
+  <div class="pg" id="p2">
+    <div class="page-header">
+      <span>Chapter 1 — Fused QK RoPE Triton Kernel</span>
+      <span class="page-num">2</span>
+    </div>
+
+    <h2><span class="sec-num">1.</span> Fused QK RoPE Triton Kernel</h2>
+    <p>Rotary Position Embedding (<span class="kw" tabindex="0">RoPE<span class="tip">Rotary Position Embedding — a method of encoding token positions into the attention mechanism by rotating the Query and Key vectors by an angle proportional to their position in the sequence. Used in Llama, Qwen, Mistral, and most modern LLMs.</span></span>) is applied to the Query (Q) and Key (K) vectors in every attention layer before the attention dot product. It is a hot path in training — called once per layer per batch.</p>
+
+    <h3>What changed</h3>
+
+    <p>Previously, RoPE required two separate <span class="kw" tabindex="0">Triton kernels<span class="tip">GPU kernel — a function that runs in parallel across thousands of GPU threads simultaneously. Each kernel launch has overhead. Merging two kernels into one eliminates half the launch overhead and allows the compiler to optimize the fused operation more aggressively.</span></span> — one for Q and one for K. Unsloth merged them into a single fused kernel and added variable-length RoPE support, which is required for padding-free and packing.</p>
+
+    <ul>
+      <li><strong>2.3× faster</strong> on long-context lengths in micro-benchmarks</li>
+      <li><strong>1.9× faster</strong> on shorter context lengths</li>
+      <li><strong>Fully in-place</strong> — all tensor clones and contiguous transpose operations eliminated, reducing GPU memory allocation</li>
+      <li>Variable-length support enables correct position ID reset when multiple packed sequences are concatenated</li>
+    </ul>
+
+    <h3>Mathematical basis</h3>
+
+    <p>The forward pass applies RoPE as a rotation. The backward pass (gradient computation) uses the same rotation matrix transposed. Unsloth exploits that the transpose of the rotation matrix <code>R</code> has the same structure — only the sign of the sine component flips — allowing the backward pass to reuse the same kernel with <code>sin = -sin</code>:</p>
+
+    <pre>
+Forward:
+  Q * cos + rotate_half(Q) * sin
+  ≡ Q * cos + Q @ R * sin
+  where R = [ 0,  I]
+             [-I,  0]
+
+Backward (gradient dC/dY):
+  dY * cos + dY @ R.T * sin
+  where R.T = [ 0, -I]   ← same structure, sign flipped
+               [ I,  0]
+
+∴ backward = forward with  sin1 = -sin1  (in-place flip)
+    </pre>
+
+    <p>This means the backward kernel is not a separate implementation — it reuses the forward kernel with a sign flag, cutting code surface area and ensuring both paths benefit from the same optimizations.</p>
+
+    <div class="callout">
+      <strong>History.</strong> The original RoPE kernel was introduced in December 2023 at Unsloth's launch. In March 2024, a community contribution (PR 238) added head-grouped block launching, gaining 1–2% end-to-end speedup. The current fused QK version is the third generation — the most significant improvement yet.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(1)">← Previous</button>
+      <span>Page 2 of 8</span>
+      <button onclick="go(3)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 3 — Int64 -->
+  <div class="pg" id="p3">
+    <div class="page-header">
+      <span>Chapter 2 — Int64 Indexing for Long Context</span>
+      <span class="page-num">3</span>
+    </div>
+
+    <h2><span class="sec-num">2.</span> Int64 Indexing for Long Context</h2>
+
+    <p>During 500K long-context training runs, a class of CUDA out-of-bounds errors appeared in the MLP kernels (<span class="kw" tabindex="0">SwiGLU<span class="tip">Swish-Gated Linear Unit — the activation function used in the feed-forward (MLP) layers of Llama, Qwen, and many other modern transformers. SwiGLU(x, g) = x * sigmoid(g) * g. Unsloth has a custom Triton kernel for it.</span></span> and <span class="kw" tabindex="0">GeGLU<span class="tip">GELU-Gated Linear Unit — a variant of gated activation used in some transformer MLP layers. Like SwiGLU but with GELU instead of Swish. Also has a custom Triton kernel in Unsloth.</span></span>). The root cause was 32-bit integer indexing.</p>
+
+    <h3>The problem</h3>
+
+    <p>By default, <span class="kw" tabindex="0">Triton<span class="tip">A GPU programming language/compiler developed by OpenAI. Triton defaults to 32-bit integer indexing for GPU memory offsets. At 32-bit, the maximum addressable index is 2³² ≈ 4.3 billion — which can overflow at very long sequence lengths with large hidden dimensions.</span></span> and CUDA use 32-bit integer (int32) indexing for memory offsets. The maximum value representable in int32 is approximately 4.3 billion. At sequence lengths of 500K tokens with large hidden dimensions, the flattened tensor index can exceed this limit, causing silent memory corruption or crashes.</p>
+
+    <h3>The solution</h3>
+
+    <p>A naïve fix — converting all indices to int64 — would slow down shorter training runs because int64 arithmetic is heavier on GPU hardware. Unsloth instead uses a <span class="kw" tabindex="0">compile-time constant<span class="tip">tl.constexpr in Triton — a value known at kernel compilation time. The Triton compiler generates specialized code for each value, so LONG_INDEXING=True compiles a different (int64) version than LONG_INDEXING=False (int32). No runtime branching overhead.</span></span> flag <code>LONG_INDEXING: tl.constexpr</code> so the compiler generates two specialized versions of the kernel — one with int32 (fast, for normal runs) and one with int64 (correct, for long-context runs):</p>
+
+    <pre>
+block_idx = tl.program_id(0)
+
+if LONG_INDEXING:
+    offsets = block_idx.to(tl.int64) * BLOCK_SIZE \
+              + tl.arange(0, BLOCK_SIZE).to(tl.int64)
+    n_elements = tl.cast(n_elements, tl.int64)
+else:
+    offsets = block_idx * BLOCK_SIZE \
+              + tl.arange(0, BLOCK_SIZE)
+    </pre>
+
+    <p>The Triton compiler specializes on the constant value — there is no runtime branch and no performance cost for short-context runs.</p>
+
+    <h3>When is LONG_INDEXING activated?</h3>
+
+    <table>
+      <thead><tr><th>Condition</th><th>Indexing mode</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>Context ≤ ~128K tokens (typical)</td><td>int32</td><td>Maximum performance, no overhead</td></tr>
+        <tr><td>Context &gt; ~128K tokens (long-context fine-tune)</td><td>int64</td><td>Correct results, marginal overhead</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>Practical note.</strong> For most fine-tuning jobs — chatbots, instruction following, coding assistants — the standard int32 path is used automatically. Long-context int64 mode activates only when the product of sequence length × hidden dimension × batch size exceeds the int32 ceiling.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(2)">← Previous</button>
+      <span>Page 3 of 8</span>
+      <button onclick="go(4)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 4 — Padding math -->
+  <div class="pg" id="p4">
+    <div class="page-header">
+      <span>Chapter 3 — Why Padding is Wasteful</span>
+      <span class="page-num">4</span>
+    </div>
+
+    <h2><span class="sec-num">3.</span> Why Padding is Wasteful — the Math</h2>
+
+    <p>GPUs process all items in a <span class="kw" tabindex="0">batch<span class="tip">A group of training examples processed together in one GPU forward/backward pass. All sequences in a batch must be the same length — so short sequences are padded with zeros to match the longest one. Those zero-padded positions compute nothing useful but still consume GPU cycles.</span></span> at the same sequence length simultaneously. When a batch contains sequences of different lengths, every sequence is padded with zeros to match the longest one. Those padding tokens consume compute and memory but contribute nothing to learning.</p>
+
+    <h3>Worst-case analysis</h3>
+
+    <p>Assume a dataset of 50% short sequences (length S) and 50% long sequences (length L). Without packing, the batch must accommodate the longest sequence, so total token usage per batch is:</p>
+
+    <span class="formula-block">
+Token usage (no packing) = batch_size × L
+    </span>
+
+    <p>With packing, short and long sequences are concatenated into one long 1D tensor per batch row. Token usage becomes:</p>
+
+    <span class="formula-block">
+Token usage (packed) = (batch_size / 2) × L + (batch_size / 2) × S
+    </span>
+
+    <h3>Speedup formula</h3>
+
+    <span class="formula-block">
+Speedup = (batch_size × L) / ((batch_size/2 × L) + (batch_size/2 × S))
+        = 2L / (L + S)
+
+If S → 0  (very short sequences):
+  Speedup → 2L / L = 2×
+
+If dataset is 80% short (20% long, 80% short):
+  Speedup = L / (0.2L + 0.8S) → L / 0.2L = 5×
+    </span>
+
+    <div class="callout success">
+      <strong>Key insight.</strong> The speedup from packing is not fixed — it depends on how short the short sequences in your dataset are. A dataset of very short QA pairs (e.g., single-sentence answers) benefits far more than a dataset of uniformly long documents.
+    </div>
+
+    <h3>Padding waste grows with batch size</h3>
+
+    <p>A counterintuitive fact: increasing <span class="kw" tabindex="0">batch size<span class="tip">Without packing, increasing batch size increases the chance that a very long sequence appears in the batch — causing all other sequences to pad to that length. At batch size 8 on typical datasets, nearly 50% of all processed tokens are padding. Packing eliminates this waste entirely.</span></span> without packing makes this worse, not better. At batch size 8 on typical conversational datasets, roughly 50% of tokens processed are padding zeros. Packing maintains near-100% valid token density at any batch size.</p>
+
+    <table>
+      <thead><tr><th>Batch size</th><th>Valid tokens (no packing)</th><th>Valid tokens (packed)</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>~100%</td><td>~100%</td></tr>
+        <tr><td>2</td><td>~80%</td><td>~99%</td></tr>
+        <tr><td>8</td><td>~50%</td><td>~99%</td></tr>
+        <tr><td>32</td><td>~30%</td><td>~99%</td></tr>
+      </tbody>
+    </table>
+
+    <div class="page-nav">
+      <button onclick="go(3)">← Previous</button>
+      <span>Page 4 of 8</span>
+      <button onclick="go(5)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 5 — Padding Free -->
+  <div class="pg" id="p5">
+    <div class="page-header">
+      <span>Chapter 4 — Padding-Free by Default</span>
+      <span class="page-num">5</span>
+    </div>
+
+    <h2><span class="sec-num">4.</span> Padding-Free by Default</h2>
+
+    <p>Since the latest Unsloth update, <span class="kw" tabindex="0">padding-free batching<span class="tip">A batching strategy where sequences are trimmed to the actual maximum length in each batch, rather than padded to a fixed global maximum. This eliminates padding tokens from every batch without requiring full sequence packing. Enabled automatically in the latest Unsloth — no code changes needed.</span></span> is automatically enabled for all training runs. No configuration is required. This alone delivers:</p>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="num">2×</div><div class="label">Training speed for Qwen3-8B and Qwen3-32B</div></div>
+      <div class="stat-card"><div class="num">60%</div><div class="label">Memory usage reduction for Qwen3 models</div></div>
+      <div class="stat-card"><div class="num">0</div><div class="label">Change in loss curve or gradient norms</div></div>
+    </div>
+
+    <h3>What padding-free means</h3>
+
+    <p>In standard batching, all sequences are padded to the same length — either a fixed <code>max_seq_length</code> or the longest sequence in the batch. Padding-free batching trims each batch to the actual maximum sequence length present, eliminating all trailing zeros. The attention mask is still respected correctly — this is not removing attention masking.</p>
+
+    <h3>Difference from full packing</h3>
+
+    <table>
+      <thead><tr><th></th><th>Padding-free (default)</th><th>Packing (<code>packing=True</code>)</th></tr></thead>
+      <tbody>
+        <tr><td>Enabled by</td><td>Automatic (update Unsloth)</td><td>Set <code>packing=True</code> in SFTConfig</td></tr>
+        <tr><td>Loss curve</td><td>Identical to baseline</td><td>Different (sees more tokens per step)</td></tr>
+        <tr><td>Dataset row count</td><td>Unchanged</td><td>Reduced (short sequences merged)</td></tr>
+        <tr><td>Speedup</td><td>1.1 – 2× (free gain)</td><td>2 – 5× (dataset-dependent)</td></tr>
+        <tr><td>Use case</td><td>Always — zero trade-offs</td><td>When max throughput is the priority</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout success">
+      <strong>Recommendation.</strong> Always run with the latest Unsloth to get padding-free automatically. Enable <code>packing=True</code> additionally if you have a dataset with many short sequences and want the maximum training speed, and you accept that the per-step loss numbers will differ from an unpacked baseline.
+    </div>
+
+    <h3>Supported backends</h3>
+
+    <p>Padding-free and packing work with all fast <span class="kw" tabindex="0">attention backends<span class="tip">The implementation used to compute the attention operation. FlashAttention 3 (FA3) is fastest on H100/B200; FlashAttention 2 works on most modern GPUs; xFormers and SDPA (PyTorch built-in) work on older hardware including Tesla T4 and RTX 2080.</span></span> — FlashAttention 3, FlashAttention 2, xFormers, and PyTorch SDPA — and on all hardware from T4 to H100 to B200.</p>
+
+    <div class="page-nav">
+      <button onclick="go(4)">← Previous</button>
+      <span>Page 5 of 8</span>
+      <button onclick="go(6)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 6 — Uncontaminated Packing -->
+  <div class="pg" id="p6">
+    <div class="page-header">
+      <span>Chapter 5 — Uncontaminated Packing</span>
+      <span class="page-num">6</span>
+    </div>
+
+    <h2><span class="sec-num">5.</span> Uncontaminated Packing</h2>
+
+    <p>Standard sequence packing — concatenating multiple short sequences into one long tensor — causes a correctness problem: the <span class="kw" tabindex="0">attention mechanism<span class="tip">The core operation in a transformer. Each token attends to (looks at) every other token in its sequence by computing dot products between Query and Key vectors. In a packed sequence, without special masking, a token from sequence 2 would incorrectly attend to tokens from sequence 1.</span></span> will allow tokens from one example to attend to tokens from a different packed example. This is called attention contamination, and it changes what the model learns.</p>
+
+    <h3>How Unsloth prevents contamination</h3>
+
+    <p>Unsloth's packing implementation preserves <span class="kw" tabindex="0">sequence length metadata<span class="tip">When multiple sequences are packed into one 1D tensor, their individual start and end positions are stored separately. The attention kernel uses this metadata to build a block-diagonal attention mask — each sequence can only attend to its own tokens.</span></span> alongside the packed tensor. This metadata is used to construct a block-diagonal attention mask so each sequence can only attend to its own tokens. Additionally, position IDs are reset to zero at the start of each packed sequence using the variable-length RoPE kernel described in Chapter 1.</p>
+
+    <h3>The two conditions for correct packing</h3>
+
+    <ol>
+      <li><strong>Attention masking</strong> — block-diagonal mask prevents cross-sequence attention. Each example sees only its own context.</li>
+      <li><strong>Position ID reset</strong> — RoPE position IDs reset to 0 at the start of each packed sub-sequence. Without this, token 0 of sequence 2 would have a position embedding as if it were token N of the combined tensor, which is incorrect.</li>
+    </ol>
+
+    <h3>Effect on training loss</h3>
+
+    <p>Because packing increases the number of tokens seen per training step (by eliminating padding waste), the per-step <span class="kw" tabindex="0">training loss<span class="tip">The loss is computed over all non-padding tokens in a batch. With packing, there are more real tokens per step, so the loss is computed over a larger, more varied sample — this makes it less noisy (less variable) step-to-step, but the absolute value is on a different scale than unpacked training.</span></span> is computed over more tokens. The loss values are less variable than unpacked training (the gradient signal is based on more tokens per step), but the raw numbers differ. This is expected and correct — the model is simply learning more per step.</p>
+
+    <div class="callout">
+      <strong>In past versions of Unsloth,</strong> increasing batch size beyond 32 made training slower due to padding overhead — each large batch needed to accommodate very long outlier sequences. With packing enabled, larger batch sizes are beneficial again: more sequences packed together = higher valid token density = faster training.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(5)">← Previous</button>
+      <span>Page 6 of 8</span>
+      <button onclick="go(7)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 7 — Benchmarks -->
+  <div class="pg" id="p7">
+    <div class="page-header">
+      <span>Chapter 6 — Benchmarks &amp; Analysis</span>
+      <span class="page-num">7</span>
+    </div>
+
+    <h2><span class="sec-num">6.</span> Benchmarks &amp; Analysis</h2>
+
+    <h3>Benchmark setup</h3>
+
+    <p>All runs used the <code>yahma/alpaca-cleaned</code> dataset. Models tested: Qwen3-32B, Qwen3-8B, Llama 3 8B. Batch sizes varied across {1, 2, 4, 8, 16, 32} with <code>max_length = 1024</code>. The baseline was Unsloth with its previous-generation kernels and FlashAttention 3 enabled — already a strong baseline.</p>
+
+    <h3>Throughput (tokens per second)</h3>
+
+    <table>
+      <thead><tr><th>Batch size</th><th>Unpacked (tok/s)</th><th>Packed (tok/s)</th><th>Speedup</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Baseline</td><td>1.1 – 1.3× baseline</td><td>~1.2×</td></tr>
+        <tr><td>4</td><td>Baseline</td><td>1.5 – 2× baseline</td><td>~1.7×</td></tr>
+        <tr><td>8</td><td>Slows (50% padding)</td><td>2 – 3× baseline</td><td>~2.5×</td></tr>
+        <tr><td>32</td><td>Slows further</td><td>3 – 5× baseline</td><td>~3–5×</td></tr>
+      </tbody>
+    </table>
+
+    <p style="font-size:0.82rem;color:var(--ink3);margin-top:-1em;">Note: gains are more pronounced on datasets with shorter average sequence length. The alpaca-cleaned dataset has many short sequences — ideal for packing.</p>
+
+    <h3>Training progress (wall-clock time)</h3>
+
+    <p>At <code>max_steps = 500</code> with <code>max_length = 2048</code>:</p>
+
+    <ul>
+      <li><strong>Packed (new):</strong> completed nearly 40% of one epoch in the same wall-clock time.</li>
+      <li><strong>Unpacked (old):</strong> completed less than 5% of one epoch in the same time.</li>
+    </ul>
+
+    <p>This is the same number of gradient steps — the packed run simply processes far more real tokens per step, covering the dataset much faster.</p>
+
+    <h3>Loss curve behavior</h3>
+
+    <p>When plotted against training steps:</p>
+    <ul>
+      <li>Loss values are in the same range and follow the same downward trend in both packed and unpacked runs.</li>
+      <li>Packed loss is <em>less noisy</em> per step — each step sees more tokens, so the gradient estimate has lower variance.</li>
+      <li>Padding-free mode (auto-enabled) produces a loss curve <em>identical</em> to the unpacked baseline.</li>
+    </ul>
+
+    <h3>Memory reduction</h3>
+
+    <table>
+      <thead><tr><th>Scenario</th><th>VRAM reduction</th></tr></thead>
+      <tbody>
+        <tr><td>Padding-free only (auto)</td><td>30 – 50%</td></tr>
+        <tr><td>Packing + new kernels (Qwen3-8B)</td><td>~60%</td></tr>
+        <tr><td>Packing + new kernels (maximum reported)</td><td>up to 90%</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>Benchmark caveat.</strong> The 5× speedup and 90% VRAM reduction figures represent best-case conditions — datasets dominated by very short sequences. Realistic speedups for mixed-length datasets are typically 1.7 – 3×. Always benchmark on your own dataset.
+    </div>
+
+    <div class="page-nav">
+      <button onclick="go(6)">← Previous</button>
+      <span>Page 7 of 8</span>
+      <button onclick="go(8)">Next →</button>
+    </div>
+  </div>
+
+  <!-- PAGE 8 — How to enable -->
+  <div class="pg" id="p8">
+    <div class="page-header">
+      <span>Chapter 7 — How to Enable Packing</span>
+      <span class="page-num">8</span>
+    </div>
+
+    <h2><span class="sec-num">7.</span> How to Enable Packing</h2>
+
+    <h3>Step 1 — Update Unsloth</h3>
+
+    <p>Padding-free batching is on by default in the latest version. Updating is sufficient to get the free 1.1–2× speedup and 30% VRAM reduction with zero code changes:</p>
+
+    <pre>
+pip install --upgrade --force-reinstall --no-cache-dir --no-deps unsloth
+pip install --upgrade --force-reinstall --no-cache-dir --no-deps unsloth_zoo
+    </pre>
+
+    <h3>Step 2 (optional) — Enable explicit packing</h3>
+
+    <p>For larger gains on short-sequence datasets, add <code>packing = True</code> to your <span class="kw" tabindex="0">SFTConfig<span class="tip">The configuration object for Unsloth's SFTTrainer (Supervised Fine-Tuning Trainer). It inherits from Hugging Face's TrainingArguments and adds Unsloth-specific settings like packing, max_length, and attention backend selection.</span></span>:</p>
+
+    <pre>
+from unsloth import FastLanguageModel
+from trl import SFTTrainer, SFTConfig
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    "unsloth/Qwen3-14B",
+)
+
+trainer = SFTTrainer(
+    model = model,
+    processing_class = tokenizer,
+    train_dataset = dataset,
+    args = SFTConfig(
+        per_device_train_batch_size = 1,
+        max_length = 4096,
+        packing = True,   # ← enables uncontaminated sample packing
+    ),
+)
+trainer.train()
+    </pre>
+
+    <div class="callout">
+      <strong>Note on loss numbers.</strong> With <code>packing=True</code>, the training loss values and the reported number of dataset rows will differ from an unpacked run — short sequences are merged, so the row count shrinks. This is expected. If you need loss numbers that are directly comparable to a non-packed baseline, use padding-free mode only (<code>packing=False</code>, default).
+    </div>
+
+    <h3>Quick decision guide</h3>
+
+    <table>
+      <thead><tr><th>Goal</th><th>Setting</th><th>Expected gain</th></tr></thead>
+      <tbody>
+        <tr><td>Zero-effort free speedup</td><td>Just update Unsloth</td><td>1.1 – 2×, 30–60% less VRAM</td></tr>
+        <tr><td>Max throughput, short-seq dataset</td><td><code>packing=True</code></td><td>2 – 5×, 60–90% less VRAM</td></tr>
+        <tr><td>Max throughput, long-seq dataset</td><td><code>packing=True</code></td><td>1.3 – 2× (less gain — fewer short sequences to pack)</td></tr>
+        <tr><td>Loss curve must match baseline</td><td>Default (<code>packing=False</code>)</td><td>1.1 – 2× (padding-free only)</td></tr>
+      </tbody>
+    </table>
+
+    <hr>
+
+    <p style="font-size:0.88rem;color:var(--ink3);">This document covers Unsloth's kernel and packing improvements. To understand how to fine-tune a model end-to-end, or how to select hardware for inference, refer to the other volumes in this library:</p>
+
+    <div style="display:flex;gap:10px;margin-top:1em;flex-wrap:wrap;">
+      <a href="fine-tuning-llms-guide.html" style="display:inline-block;padding:8px 18px;border:1px solid var(--rule);background:var(--paper2);font-family:var(--font-body);font-size:0.85rem;color:var(--ink2);text-decoration:none;border-radius:2px;border-left:3px solid var(--accent);">← Fine-tuning LLMs Guide</a>
+      <a href="index.html" style="display:inline-block;padding:8px 18px;border:1px solid var(--rule);background:var(--paper2);font-family:var(--font-body);font-size:0.85rem;color:var(--ink2);text-decoration:none;border-radius:2px;border-left:3px solid #2a5a8b;">← LLM Inference Engineering</a>
+    </div>
+
+    <hr style="margin-top:2em;">
+    <p style="font-size:0.78rem;color:var(--ink3);text-align:center;">Unsloth Kernels &amp; Packing &nbsp;·&nbsp; Adapted from Unsloth Documentation &nbsp;·&nbsp; llm_tok.qbitkode.com</p>
+
+    <div class="page-nav">
+      <button onclick="go(7)">← Previous</button>
+      <span>Page 8 of 8</span>
+      <button disabled>Next →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function go(n) {
+    document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
+    document.getElementById('p' + n).classList.add('active');
+    document.getElementById('book').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+</script>
+</body>
+</html>
